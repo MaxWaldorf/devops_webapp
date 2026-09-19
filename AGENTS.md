@@ -19,30 +19,35 @@ and toggleable layers for capabilities, coverage, tooling and roadmap.
 | Path | Role |
 | --- | --- |
 | `src/index.html` | The design (template + logic class). Edit this. |
+| `src/styles.css` | Nocturne tokens/component classes, `@font-face` (Inter, Phosphor), page base styles, `u-…` utilities and `c-…` classes for the template's static styling. Linked from `<head>`. |
 | `src/vendor/` | DC runtime (`dc-support.js`), React 18.3.1 UMD, Nocturne `ds-bundle.js`. |
 | `src/fonts/` | Inter (7 subsets, variable) + Phosphor icon font, woff2 only. |
 | `README.md` | Public overview. Keep it current (see Conventions). |
 | `tools/build.py` | Builds both deliverables from `src/` (stdlib Python) and `--check`s they match. |
-| `Dockerfile`, `docker-compose.yml` | Container: build stage runs build + check, stock `nginx:stable-alpine` serves `dist/web` from its default location (no custom nginx config). |
-| `Makefile`, `.dockerignore`, `.gitignore` | Shortcuts; keep `dist/` and `screenshots/` out of git and the image. |
+| `tools/server.py` | Stdlib static server + per-browser model API (`/api/model`, `cid` cookie, files in `DATA_DIR`). |
+| `Dockerfile`, `docker-compose.yml` | Container: build stage runs build + check, `python:alpine` runs `tools/server.py` serving `dist/web`; model files in the `/data` volume. |
+| `Makefile`, `.dockerignore`, `.gitignore` | Shortcuts; keep `dist/`, `screenshots/`, `.data/` and `node_modules/` out of git and the image. |
+| `package.json`, `.stylelintrc.json`, `.htmlvalidate.json` | Dev-only lint tooling and rules for `make lint` (Node). The app itself has no Node dependencies. |
 | `dist/` | Generated, git-ignored. `dist/web/` (site) and `dist/standalone/devops-lifecycle.html` (single file). |
 
 ## Two deliverables, one source
 
-- **Hosted site** — `docker compose up --build` → http://localhost:8080.
+- **Hosted site** — `docker compose up --build` → http://localhost:8080. Models persist in the `devops-data` volume (`/data`).
 - **Local standalone** — `make standalone` → `dist/standalone/devops-lifecycle.html`;
   double-click it, works offline from `file://`. It is for local use only: it is
   **not** copied into the image, linked from the site, or otherwise distributed
   (`make check` fails if it ends up under `dist/web`).
 
 They stay in sync **by construction**: the standalone is a purely mechanical inlining
-of `src/index.html` (`<script src="vendor/…">` and `url(fonts/…)` become inline/data URIs);
+of `src/index.html` (`<script src="vendor/…">`, `<link rel="stylesheet" href="styles.css">` and `url(fonts/…)` become inline/data URIs);
 there is no second copy of any logic. Both carry `<meta name="build-id">` = hash of all
 of `src/`. `make check` (and the Docker build) fails if the ids or the inlining differ. Never edit `dist/`, and never fork behaviour between the two —
 if something must differ, do it in `build.py`, not by hand.
 
-Note: `localStorage` is per origin, so the model saved in the hosted site and in the
-local file are separate. Move data between them with Editor → Save/Load JSON.
+Where the model is saved differs by design, not by code: the hosted site stores it
+server-side per browser (see Data model), the standalone (`file://`) uses `localStorage`.
+The two are separate; move data between them with Editor → Save/Load JSON. Same code,
+the client just picks the store at runtime.
 
 ## Commands
 
@@ -50,18 +55,19 @@ local file are separate. Move data between them with Editor → Save/Load JSON.
 | --- | --- |
 | `make build` | Generate `dist/web` and `dist/standalone/devops-lifecycle.html`. |
 | `make check` | Build, then verify both outputs match the source (build id, inlining, standalone not in the web package). |
-| `make serve` | Preview `dist/web` at http://localhost:8080 (plain static server). |
+| `make lint` | stylelint on `src/styles.css`, html-validate on `src/index.html` (Node dev tools via `package.json`; keep it clean before finishing a change). |
+| `make serve` | Preview `dist/web` at http://localhost:8080 with `tools/server.py` (static + `/api/model`, data in git-ignored `.data/`). |
 | `make standalone` | Build and print the path of the single-file version. |
 | `make run` / `make docker` | `docker compose up --build` / build the image only. |
 
-Container notes: multi-stage (`python:alpine` builds and checks, `nginx:stable-alpine`
-serves `dist/web` from `/usr/share/nginx/html` with the stock config). No custom
-`nginx.conf`, so no explicit cache headers or gzip; nginx's default ETag/Last-Modified
-revalidation applies. Add a config only if that becomes a problem. Changing anything
+Container notes: multi-stage (`python:alpine` builds and checks, a second `python:alpine`
+runs `tools/server.py`). No gzip/cache tuning; put a reverse proxy in front if needed
+(it should send `X-Forwarded-Proto` so the cookie gets `Secure`). Changing anything
 under `src/` changes the build id, so rebuild the image to ship it.
 
-Verifying a change: run `make check`, then open **both** `dist/standalone/…html` (via
-`file://`) and the served site, and click through all three tabs. Headless browsers
+Verifying a change: run `make lint` and `make check`, then open **both**
+`dist/standalone/…html` (via `file://`) and the served site, and click through all three
+tabs. Headless browsers
 work (`--screenshot`, `--virtual-time-budget`).
 
 ## License
@@ -89,8 +95,8 @@ caveat in `THIRD-PARTY-NOTICES.md` first).
 
 ## Design system
 
-**Nocturne** is binding. Its tokens and component classes are inlined in the
-`<helmet>` of `src/index.html` (namespace stub in `src/vendor/ds-bundle.js`); the old
+**Nocturne** is binding. Its tokens and component classes live in
+`src/styles.css` (namespace stub in `src/vendor/ds-bundle.js`); the old
 `_ds/` folder no longer exists. Every colour, radius, shadow and font comes from its
 `var(--*)` tokens. Dark ground `--color-bg`, one blurple accent used as line and glow, outlined buttons, no
 saturated floods. Icons are **Phosphor** (`@phosphor-icons/web@2.1.1`, `<i class="ph ph-…">`).
@@ -115,8 +121,19 @@ saturated floods. Icons are **Phosphor** (`@phosphor-icons/web@2.1.1`, `<i class
 
 ## Data model
 
-Held in component state, persisted to `localStorage` under **`devops-loop-model-v3`**,
-`schema: 4`.
+Held in component state, `schema: 4`. Persistence: over http(s) with `/api/model`
+present it is stored **server-side per browser** (cookie `cid`, debounced PUT, no
+localStorage); on `file://` or without the API it falls back to `localStorage` key
+**`devops-loop-model-v3`**.
+
+Server API (`tools/server.py`): `GET /api/model` → `{ "model": <model|null> }`, and sets the
+`cid` cookie (random 32-hex, HttpOnly, 10 years) on first contact; `PUT /api/model` stores
+the body (must have 8 `stages` and a `tools` array, max 2 MB) as `DATA_DIR/<cid>.json`,
+atomically. No accounts: clearing cookies or switching browser starts a fresh model. The
+client (`initStore()` / `persist()` in the logic class) asks the API first and falls back
+to `localStorage` if it is absent or `file://`; edits made before the first response are
+kept and pushed, not overwritten. Nothing is written until the first edit, so a browser
+that never edits keeps getting the seed.
 
 ```js
 {
@@ -164,21 +181,31 @@ that wrapper or a bare model, validates the shape, migrates, then saves.
   `tools/`, the data model / storage key / schema, CI or licensing must update `README.md`
   in the same change. Before finishing any task, re-read `README.md` and confirm it is still accurate.
 
-- One DC file: `src/index.html`. Edit it directly, then `make check` and open both
-  outputs. Do **not** hand-write `.jsx` or extra HTML pages. New local assets must live
-  under `src/vendor/` or `src/fonts/` (the only paths `build.py` inlines) and be
-  referenced as `vendor/…` / `fonts/…`; no CDN or other external URLs, so the
-  standalone stays offline.
-- Inline styles only; design-system classes (`.btn`, `.input`, `.card`, `.nav`,
-  `.table`, `.tag`) are fine. `.input` is `width:100%` — any `.input` sitting
-  directly in a flex row needs `width:auto;flex:none`.
+- One DC file: `src/index.html`. Edit it directly, then `make lint`, `make check` and
+  open both outputs. Do **not** hand-write `.jsx` or extra HTML pages. New local assets
+  must live under `src/vendor/` or `src/fonts/` (or be `src/styles.css`); those are the
+  only paths `build.py` inlines. Reference them as `vendor/…` / `fonts/…` / `styles.css`;
+  no CDN or other external URLs, so the standalone stays offline.
+- Styling: static styles live in `src/styles.css` (Nocturne classes, `@font-face`,
+  base styles, then at the end `u-…` single-declaration utilities and `c-…` classes for
+  the template's remaining static declarations). Only declarations containing a `{{…}}`
+  hole stay as inline `style=` attributes. Add new static styles to the CSS, not inline.
+  The hosted site loads it as a cache-busted `styles.css?v=<build id>`; the standalone
+  inlines it. Design-system classes (`.btn`, `.input`, `.card`, `.nav`, `.table`, `.tag`)
+  are fine. `.input` is `width:100%` — any `.input` sitting directly in a flex row needs
+  `width:auto;flex:none`. Utilities and `c-…` classes come after the design-system rules,
+  so they override them like inline styles did (but not `:hover`/`:focus` rules).
+- Lint: `make lint` (stylelint standard config, html-validate) must stay clean. Buttons
+  need `type`, icon-only buttons an `aria-label`, inputs a `type`. The rules turned off
+  in `.stylelintrc.json` / `.htmlvalidate.json` are deliberate (generated class names,
+  vendor Phosphor CSS, custom template elements and `{{…}}` placeholders).
 - Template holes are dotted lookups only; compute everything in `renderVals()`.
-- Never store anything in `localStorage` other than the model key above.
+- Never store anything in `localStorage` other than the model key above (and only in the fallback mode).
 - Capability icons: the editor's type-to-search list is meant to read all ~1,530
   Phosphor names from a `<link href*="phosphor">` stylesheet at runtime. The
-  Phosphor CSS is now inlined (no such `<link>`), so that fetch never runs and the
-  editor always uses the curated `ICONS` array. Known gap: to restore the full list,
-  read the names from the inlined stylesheet (`document.styleSheets`) in
+  Phosphor CSS now lives in `src/styles.css` (no such `<link>`), so that fetch never runs
+  and the editor always uses the curated `ICONS` array. Known gap: to restore the full
+  list, read the names from the loaded stylesheet (`document.styleSheets`) in
   `componentDidMount` instead of fetching. Do not re-add a `<link>` to a CDN.
 
 ## Placeholders to replace with real data

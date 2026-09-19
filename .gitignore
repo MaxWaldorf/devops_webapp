@@ -1,2 +1,4 @@
 dist/
 screenshots/
+.data/
+node_modules/

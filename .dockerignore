@@ -3,3 +3,5 @@ dist
 screenshots
 AGENTS.md
 README.md
+.data
+node_modules/

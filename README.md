@@ -25,6 +25,7 @@ Requires Python 3 (build) and optionally Docker (hosted image).
 | --- | --- |
 | `make build` | Generate `dist/web` and `dist/standalone/devops-lifecycle.html` from `src/`. |
 | `make check` | Build, verify both outputs match the source. |
+| `make lint` | Lint `src/styles.css` (stylelint) and `src/index.html` (html-validate). Needs Node; installs dev tools from `package.json`. |
 | `make serve` | Preview the site at http://localhost:8080. |
 | `make standalone` | Build and print the path of the single-file version (double-click to open, works from `file://`). |
 | `make run` | `docker compose up --build`, served at http://localhost:8080. |
@@ -38,18 +39,25 @@ The standalone file is for local use only and is never part of the hosted image.
 | Path | Role |
 | --- | --- |
 | `src/index.html` | The whole design (template and logic). The single source of truth; edit this. |
+| `src/styles.css` | Design-system tokens, component classes, font faces, base styles and the template's static styling; only data-driven styles stay inline in `index.html` (separate file on the hosted site, inlined into the standalone). |
 | `src/vendor/`, `src/fonts/` | Vendored React, DC runtime, design-system bundle, Inter and Phosphor fonts. |
 | `tools/build.py` | Builds the site and the standalone file and checks they match. |
-| `Dockerfile`, `docker-compose.yml` | Build stage runs build and check; stock nginx serves `dist/web`. |
+| `tools/server.py` | Static server plus the per-browser `/api/model` store (used by `make serve` and the image). |
+| `Dockerfile`, `docker-compose.yml` | Build stage runs build and check; the runtime image serves `dist/web` plus the model API with `tools/server.py`. |
+| `package.json`, `.stylelintrc.json`, `.htmlvalidate.json` | Dev-only lint tooling and its rules (the app has no Node dependencies). |
 | `AGENTS.md` | Detailed working notes for contributors and agents. |
 
 `dist/` is generated and git-ignored; never edit it.
 
 ## Data model
 
-The model lives in `localStorage` under `devops-loop-model-v3` (schema 4) and can be
-exported and imported as JSON from the Editor tab. Storage is per origin, so the hosted
-site and the local file keep separate models; move data between them with Save/Load JSON.
+On the hosted site the model (schema 4) is stored **server-side**, one JSON file per
+browser under `DATA_DIR` (`/data` in the container, the `devops-data` volume in compose),
+keyed by a random `cid` cookie via `GET/PUT /api/model` (`tools/server.py`). A returning
+browser gets its model back; there are no accounts, so clearing cookies or switching
+browser starts fresh. The standalone `file://` build, or any static server without the
+API, falls back to `localStorage` under `devops-loop-model-v3`. The model can also be
+exported and imported as JSON from the Editor tab; use that to move data between them.
 Quarter keys are absolute (`"YYYY-Qn"`), so changing the timeline range never loses data.
 Full details are in [AGENTS.md](AGENTS.md).
 

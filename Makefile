@@ -1,4 +1,4 @@
-.PHONY: build check serve standalone docker run clean
+.PHONY: build check lint serve standalone docker run clean
 
 build:      ## build dist/web and dist/standalone from src/
 	python3 tools/build.py
@@ -9,8 +9,13 @@ check: build ## build, then verify web + standalone are in sync
 standalone: build ## the single-file local version -> dist/standalone/devops-lifecycle.html
 	@echo dist/standalone/devops-lifecycle.html
 
+lint: ## lint src/styles.css (stylelint) and src/index.html (html-validate); needs Node
+	npm install --no-audit --no-fund --silent
+	npx stylelint src/styles.css
+	npx html-validate src/index.html
+
 serve: build ## preview the web build at http://localhost:8080
-	python3 -m http.server 8080 -d dist/web
+	DATA_DIR=.data python3 tools/server.py --dir dist/web --port 8080
 
 docker: ## build the container image
 	docker build -t devops-lifecycle .

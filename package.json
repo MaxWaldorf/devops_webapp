@@ -1,0 +1,10 @@
+{
+  "name": "devops-lifecycle",
+  "private": true,
+  "description": "Dev-only linting tools; the app itself has no Node dependencies.",
+  "devDependencies": {
+    "html-validate": "^10.0.0",
+    "stylelint": "^16.0.0",
+    "stylelint-config-standard": "^38.0.0"
+  }
+}
