@@ -1,0 +1,7 @@
+services:
+  devops-lifecycle:
+    build: .
+    image: devops-lifecycle:latest
+    ports:
+      - "8080:80"
+    restart: unless-stopped
