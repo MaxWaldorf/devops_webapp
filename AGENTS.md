@@ -21,6 +21,7 @@ and toggleable layers for capabilities, coverage, tooling and roadmap.
 | `src/index.html` | The design (template + logic class). Edit this. |
 | `src/vendor/` | DC runtime (`dc-support.js`), React 18.3.1 UMD, Nocturne `ds-bundle.js`. |
 | `src/fonts/` | Inter (7 subsets, variable) + Phosphor icon font, woff2 only. |
+| `README.md` | Public overview. Keep it current (see Conventions). |
 | `tools/build.py` | Builds both deliverables from `src/` (stdlib Python) and `--check`s they match. |
 | `Dockerfile`, `docker-compose.yml` | Container: build stage runs build + check, stock `nginx:stable-alpine` serves `dist/web` from its default location (no custom nginx config). |
 | `Makefile`, `.dockerignore`, `.gitignore` | Shortcuts; keep `dist/` and `screenshots/` out of git and the image. |
@@ -158,6 +159,10 @@ Save JSON writes `{ format: "devops-loop", version: 4, model }`; Load accepts
 that wrapper or a bare model, validates the shape, migrates, then saves.
 
 ## Conventions to keep
+
+- **Keep `README.md` in sync.** Any change to commands, Makefile targets, tabs, files in
+  `tools/`, the data model / storage key / schema, CI or licensing must update `README.md`
+  in the same change. Before finishing any task, re-read `README.md` and confirm it is still accurate.
 
 - One DC file: `src/index.html`. Edit it directly, then `make check` and open both
   outputs. Do **not** hand-write `.jsx` or extra HTML pages. New local assets must live
