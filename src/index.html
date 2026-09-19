@@ -240,8 +240,20 @@
         <span class="u-font-size-12px" style="color:{{ioFg}}">{{ioMsg}}</span>
         <button type="button" class="btn btn-primary u-gap-7px c-border-1px-solid-color_color-accent-100" sc-camel-on-click="{{saveFile}}"><i class="ph ph-download-simple"></i>Save JSON</button>
         <button type="button" class="btn btn-secondary u-border-1px-solid-color-divider u-gap-7px" sc-camel-on-click="{{openFile}}"><i class="ph ph-upload-simple"></i>Load JSON</button>
-        <button type="button" class="btn btn-secondary u-border-1px-solid-color-divider u-gap-7px" sc-camel-on-click="{{resetModel}}"><i class="ph ph-arrow-counter-clockwise"></i>Reset to sample</button>
+        <button type="button" class="btn btn-secondary u-border-1px-solid-color-divider u-gap-7px" sc-camel-on-click="{{askReset}}"><i class="ph ph-arrow-counter-clockwise"></i>Reset to sample</button>
         <input class="c-display-none" ref="{{fileRef}}" type="file" accept="application/json,.json" sc-camel-on-change="{{loadFile}}">
+        <sc-if value="{{confirmReset}}">
+          <div class="dialog-backdrop c-modal-top" sc-camel-on-click="{{cancelReset}}">
+            <div class="dialog" role="alertdialog" aria-modal="true" aria-labelledby="reset-title" sc-camel-on-click="{{keepDialog}}">
+              <div class="dialog-title" id="reset-title">Reset to sample?</div>
+              <div class="dialog-body">This replaces your whole model (stages, capabilities, tools, dates and notes) with the sample content. It cannot be undone — use Save JSON first if you want a copy.</div>
+              <div class="dialog-actions">
+                <button type="button" class="btn btn-secondary u-border-1px-solid-color-divider" sc-camel-on-click="{{cancelReset}}">Cancel</button>
+                <button type="button" class="btn btn-primary u-gap-7px c-border-1px-solid-color_color-accent-100" sc-camel-on-click="{{doReset}}"><i class="ph ph-arrow-counter-clockwise"></i>Reset to sample</button>
+              </div>
+            </div>
+          </div>
+        </sc-if>
       </div>
     </div>
 
@@ -328,25 +340,40 @@
     <div class="u-flex u-col u-gap-12px">
       <div class="u-flex u-gap-10px u-wrap c-align-items-baseline">
         <h2 class="c-font-size-20px_margin-0">Tools</h2>
-        <span class="u-font-size-12px u-color-neutral-300">a tool can face several capabilities — and the same tool can be listed more than once</span>
+        <span class="u-font-size-12px u-color-neutral-300">a tool can face several capabilities — each with its own coverage state and dates</span>
       </div>
       <div class="c-overflow-x-auto_padding-bottom-4px">
         <div class="u-flex u-col u-gap-8px c-min-width-1080px">
-          <div class="u-grid u-gap-10px u-upper u-color-accent-300 c-grid-template-columns_padding-0-4px-6px_font-size-10px">
-            <span>Tool</span><span>Core capabilities covered</span><span>Coverage state</span><span>Start quarter</span><span>End quarter</span><span>Status</span><span></span>
+          <div class="u-grid u-gap-10px u-upper u-color-accent-300 c-ed-head">
+            <span>Tool</span>
+            <div class="u-grid u-gap-10px c-ed-assign"><span>Core capability</span><span>Coverage state (current)</span><span>Start quarter</span><span>End quarter</span><span></span></div>
+            <span>Check</span><span></span>
           </div>
           <sc-for list="{{edTools}}" as="tt" hint-placeholder-count="6">
-            <div class="u-grid u-gap-10px u-align-items-start u-border-radius-8px c-grid-template-columns_padding-10px-4px" style="background:{{tt.rowBg}}">
+            <div class="u-grid u-gap-10px u-align-items-start u-border-radius-8px c-ed-row" style="background:{{tt.rowBg}}">
               <input type="text" class="input c-padding-5px-8px_font-size-13px" value="{{tt.name}}" placeholder="Tool name" sc-camel-on-change="{{tt.setName}}" sc-camel-on-input="{{tt.setName}}">
               <div class="u-flex u-col u-gap-6px">
-                <div class="u-flex u-wrap u-gap-5px">
-                  <sc-for list="{{tt.chips}}" as="ch" hint-placeholder-count="2">
-                    <span class="u-flex u-items-center u-gap-6px u-font-size-11-5px c-padding-2px-4px-2px-8p_border-radius-6px_background-color">
-                      <i class="ph {{ch.icon}} u-font-size-12px"></i>{{ch.label}}
-                      <button aria-label="Unassign" type="button" class="btn btn-icon c-width-18px_height-18px_font-size-10px" title="Unassign" sc-camel-on-click="{{ch.remove}}"><i class="ph ph-x"></i></button>
-                    </span>
-                  </sc-for>
-                </div>
+                <sc-for list="{{tt.assigns}}" as="as" hint-placeholder-count="2">
+                  <div class="u-grid u-gap-10px u-items-center c-ed-assign">
+                    <span class="u-justify-self-start u-flex u-items-center u-gap-6px u-font-size-11-5px c-padding-2px-4px-2px-8p_border-radius-6px_background-color"><i class="ph {{as.icon}} u-font-size-12px"></i>{{as.label}}</span>
+                    <sc-raw-select class="input u-font-size-12-5px c-padding-5px-6px" value="{{as.cov}}" sc-camel-on-change="{{as.setCov}}">
+                      <sc-for list="{{covOptions}}" as="so" hint-placeholder-count="4">
+                        <option value="{{so.v}}">{{so.n}}</option>
+                      </sc-for>
+                    </sc-raw-select>
+                    <sc-raw-select class="input u-font-size-12-5px c-padding-5px-6px" style="opacity:{{as.startOp}}" value="{{as.start}}" disabled="{{as.startOff}}" sc-camel-on-change="{{as.setStart}}">
+                      <sc-for list="{{quarterOptions}}" as="qo" hint-placeholder-count="6">
+                        <option value="{{qo.v}}">{{qo.n}}</option>
+                      </sc-for>
+                    </sc-raw-select>
+                    <sc-raw-select class="input u-font-size-12-5px c-padding-5px-6px" style="opacity:{{as.endOp}}" value="{{as.end}}" disabled="{{as.endOff}}" sc-camel-on-change="{{as.setEnd}}">
+                      <sc-for list="{{quarterOptions}}" as="qo" hint-placeholder-count="6">
+                        <option value="{{qo.v}}">{{qo.n}}</option>
+                      </sc-for>
+                    </sc-raw-select>
+                    <button aria-label="Unassign" type="button" class="btn btn-icon c-width-18px_height-18px_font-size-10px" title="Unassign" sc-camel-on-click="{{as.remove}}"><i class="ph ph-x"></i></button>
+                  </div>
+                </sc-for>
                 <sc-raw-select class="input u-font-size-12px c-padding-4px-6px_max-width-260px" value="" sc-camel-on-change="{{tt.addCap}}">
                   <option value="">+ assign a capability…</option>
                   <sc-for list="{{capOptions}}" as="co" hint-placeholder-count="8">
@@ -354,22 +381,10 @@
                   </sc-for>
                 </sc-raw-select>
               </div>
-              <sc-raw-select class="input u-font-size-12-5px c-padding-5px-6px" value="{{tt.cov}}" sc-camel-on-change="{{tt.setCov}}">
-                <sc-for list="{{covOptions}}" as="so" hint-placeholder-count="4">
-                  <option value="{{so.v}}">{{so.n}}</option>
-                </sc-for>
-              </sc-raw-select>
-              <sc-raw-select class="input u-font-size-12-5px c-padding-5px-6px" style="opacity:{{tt.startOp}}" value="{{tt.start}}" disabled="{{tt.startOff}}" sc-camel-on-change="{{tt.setStart}}">
-                <sc-for list="{{quarterOptions}}" as="qo" hint-placeholder-count="6">
-                  <option value="{{qo.v}}">{{qo.n}}</option>
-                </sc-for>
-              </sc-raw-select>
-              <sc-raw-select class="input u-font-size-12-5px c-padding-5px-6px" style="opacity:{{tt.endOp}}" value="{{tt.end}}" disabled="{{tt.endOff}}" sc-camel-on-change="{{tt.setEnd}}">
-                <sc-for list="{{quarterOptions}}" as="qo" hint-placeholder-count="6">
-                  <option value="{{qo.v}}">{{qo.n}}</option>
-                </sc-for>
-              </sc-raw-select>
-              <span class="u-flex u-items-center u-gap-6px u-font-size-11-5px" style="color:{{tt.stFg}}"><i class="ph {{tt.stIcon}} u-font-size-14px"></i>{{tt.stLabel}}</span>
+              <div class="u-flex u-col u-gap-2px u-font-size-11-5px" style="color:{{tt.stFg}}">
+                <span class="u-flex u-items-center u-gap-6px"><i class="ph {{tt.stIcon}} u-font-size-14px"></i>{{tt.stLabel}}</span>
+                <span class="u-font-size-11px">{{tt.stError}}</span>
+              </div>
               <button aria-label="Remove tool" type="button" class="btn btn-icon u-border-1px-solid-color-divider u-font-size-14px c-width-34px_height-30px" title="Remove tool" sc-camel-on-click="{{tt.remove}}"><i class="ph ph-trash"></i></button>
             </div>
           </sc-for>
@@ -377,7 +392,7 @@
       </div>
       <div class="u-flex u-gap-10px u-items-center u-wrap">
         <button type="button" class="btn btn-primary u-gap-7px c-border-1px-solid-color_color-accent-100" sc-camel-on-click="{{addTool}}"><i class="ph ph-plus"></i>Add tool</button>
-        <span class="u-font-size-12px u-color-neutral-300">Mandatory for a complete row: a name, at least one capability, and a coverage state. Start quarter applies to “Not covered”; end quarter to “Not covered” and “Partially”.</span>
+        <span class="u-font-size-12px u-color-neutral-300">Mandatory for a complete row: a name and at least one capability. Per capability, start quarter applies to “Not covered”; end quarter to “Not covered” and “Partially”.</span>
       </div>
     </div>
   </div>
@@ -442,12 +457,31 @@
                       <textarea class="input u-font-size-11-5px u-line-height-1-35 c-padding-5px-7px_resize-vertical_font-family-font-body" rows="2" placeholder="One bullet per line" value="{{tc.note}}" sc-camel-on-change="{{tc.setNote}}" sc-camel-on-input="{{tc.setNote}}" sc-camel-on-blur="{{tc.stop}}"></textarea>
                     </sc-if>
                     <sc-if value="{{tc.idle}}">
-                      <button type="button" class="btn u-col c-align-items-stretch_gap-3px_justify-content-flex-s" style="color:{{tc.noteFg}};border:1px dashed {{tc.noteBd}}" sc-camel-on-click="{{tc.edit}}">
+                      <sc-if value="{{tc.emptyNote}}">
+                        <button aria-label="Add note" title="Add note" type="button" class="btn c-note-add" sc-camel-on-click="{{tc.edit}}"><i class="ph ph-plus"></i></button>
+                      </sc-if>
+                      <sc-if value="{{tc.hasNote}}">
+                      <div class="u-flex u-col c-gap-3px c-note-box" style="border:1px dashed {{tc.noteBd}}">
                         <sc-for list="{{tc.lines}}" as="nl" hint-placeholder-count="1">
-                          <span class="u-flex u-align-items-flex-start u-gap-6px"><span class="u-height-4px u-round u-no-shrink c-width-4px_background-accen_margin-top-5px"></span><span class="c-flex-1">{{nl.text}}</span></span>
+                          <div class="u-flex u-col c-gap-3px">
+                            <div class="u-flex u-align-items-flex-start u-gap-6px">
+                              <button type="button" class="btn c-note-line" title="Edit note" sc-camel-on-click="{{nl.edit}}"><span class="u-height-4px u-round u-no-shrink c-width-4px_background-accen_margin-top-5px"></span><span class="c-flex-1">{{nl.text}}</span></button>
+                              <sc-if value="{{nl.canCopy}}">
+                                <button aria-label="Copy line to other capabilities" type="button" class="btn btn-icon c-width-18px_height-18px_font-size-10px" title="Copy line to…" sc-camel-on-click="{{nl.toggleMenu}}"><i class="ph ph-copy"></i></button>
+                              </sc-if>
+                            </div>
+                            <sc-if value="{{nl.menuOpen}}">
+                              <div class="u-flex u-col c-gap-3px c-copy-menu">
+                                <sc-for list="{{nl.targets}}" as="tg" hint-placeholder-count="1">
+                                  <button type="button" class="btn c-copy-item" sc-camel-on-click="{{tg.copy}}">Copy to {{tg.label}}</button>
+                                </sc-for>
+                                <button type="button" class="btn c-copy-item" sc-camel-on-click="{{nl.copyAll}}">Copy to all</button>
+                              </div>
+                            </sc-if>
+                          </div>
                         </sc-for>
-                        <span class="u-font-size-11-5px" style="display:{{tc.emptyDisp}}">+ note</span>
-                      </button>
+                      </div>
+                      </sc-if>
                     </sc-if>
                   </div>
                 </sc-for>
@@ -498,7 +532,26 @@ function qIndex(r, key) {
   return (+mm[1] - r.sy) * 4 + (+mm[2] - r.sq);
 }
 function migrate(m) {
-  if (!m || m.schema === 4) return m;
+  if (!m || m.schema === 6) return m;
+  if (m.schema !== 4 && m.schema !== 5) migrateV4(m);
+  if (m.schema === 4) {
+    // v4 -> v5: coverage state and dates move from the tool onto each assigned capability
+    (m.tools || []).forEach(t => {
+      const cov = t.cov || "n", startQ = t.startQ || null, endQ = t.endQ || null;
+      t.caps = (t.caps || []).map(c => typeof c === "string" ? { id: c, cov, startQ, endQ } : c);
+      delete t.cov; delete t.startQ; delete t.endQ;
+    });
+    m.schema = 5;
+  }
+  // v5 -> v6: notes move from the tool onto each assigned capability (each keeps a copy)
+  (m.tools || []).forEach(t => {
+    (t.caps || []).forEach(c => { c.notes = Object.assign({}, t.notes); });
+    delete t.notes;
+  });
+  m.schema = 6;
+  return m;
+}
+function migrateV4(m) {
   const r = m.range || DEFAULT_RANGE;
   const conv = obj => {
     if (!obj) return {};
@@ -514,7 +567,6 @@ function migrate(m) {
   });
   (m.stages || []).forEach(s => { s.highlights = conv(s.highlights); });
   m.schema = 4;
-  return m;
 }
 
 function qName(r, i) {
@@ -597,9 +649,12 @@ function seedModel() {
       if (sig.start != null) sig.start = Math.min(sig.start, maxQ);
       if (sig.end != null) sig.end = Math.min(sig.end, maxQ);
       c[3].forEach(name => {
-        const k = name + "|" + sig.cov + "|" + sig.start + "|" + sig.end;
-        if (!groups.has(k)) groups.set(k, { id: "t" + (++tid), name, caps: [], cov: sig.cov, start: sig.start, end: sig.end });
-        groups.get(k).caps.push(id);
+        if (!groups.has(name)) groups.set(name, { id: "t" + (++tid), name, caps: [] });
+        groups.get(name).caps.push({
+          id, cov: sig.cov, notes: {},
+          startQ: sig.start == null ? null : qKey(DEFAULT_RANGE, sig.start),
+          endQ: sig.end == null ? null : qKey(DEFAULT_RANGE, sig.end)
+        });
       });
       return { id, label: c[1], icon: c[0] };
     });
@@ -610,18 +665,18 @@ function seedModel() {
   stages.forEach(s => {
     const ids = s.caps.map(c => c.id);
     QUARTERS.forEach((q, qi) => {
-      const lines = [];
+      const lines = [], key = qKey(DEFAULT_RANGE, qi);
       tools.forEach(t => {
-        const mine = t.caps.filter(id => ids.indexOf(id) >= 0);
-        if (!mine.length) return;
-        const what = mine.map(nameOf).join(", ");
-        if (t.end === qi) lines.push(t.name + " fully covers " + what);
-        else if (t.start === qi) lines.push(t.name + " starts covering " + what);
+        const mine = t.caps.filter(a => ids.indexOf(a.id) >= 0);
+        const ends = mine.filter(a => a.endQ === key);
+        const starts = mine.filter(a => a.startQ === key && a.endQ !== key);
+        if (ends.length) lines.push(t.name + " fully covers " + ends.map(a => nameOf(a.id)).join(", "));
+        if (starts.length) lines.push(t.name + " starts covering " + starts.map(a => nameOf(a.id)).join(", "));
       });
-      if (lines.length) s.highlights[qi] = lines.join("\n");
+      if (lines.length) s.highlights[key] = lines.join("\n");
     });
   });
-  return migrate({ stages, tools, range: Object.assign({}, DEFAULT_RANGE) });
+  return { schema: 6, stages, tools, range: Object.assign({}, DEFAULT_RANGE) };
 }
 
 function validModel(m) {
@@ -780,13 +835,14 @@ class Component extends DCLogic {
     return { d, p, l: [p[0] + vx * off, p[1] + vy * off] };
   }
 
-  effective(tool, i, range) {
+  // status of one tool→capability assignment {id, cov, startQ, endQ} at stop i
+  effective(a, i, range) {
     const r = range || (this.state.model || {}).range || DEFAULT_RANGE;
-    const s = tool.startQ ? qIndex(r, tool.startQ) : null;
-    const e = tool.endQ ? qIndex(r, tool.endQ) : null;
-    if (tool.cov === "x") return "x";
-    if (tool.cov === "c") return "c";
-    if (tool.cov === "p") return e != null && i >= e ? "c" : "p";
+    const s = a.startQ ? qIndex(r, a.startQ) : null;
+    const e = a.endQ ? qIndex(r, a.endQ) : null;
+    if (a.cov === "x") return "x";
+    if (a.cov === "c") return "c";
+    if (a.cov === "p") return e != null && i >= e ? "c" : "p";
     if (e != null && i >= e) return "c";
     if (s != null && i >= s) return "p";
     return "n";
@@ -800,13 +856,14 @@ class Component extends DCLogic {
     const stopIdx = Math.min(QUARTERS.length - 1, Math.round(st.tPos));
     const focus = st.selected !== null ? st.selected : st.hover !== null ? st.hover : st.cursor;
 
-    const toolsFor = id => m.tools.filter(t => (t.caps || []).indexOf(id) >= 0);
+    const assignOf = (t, id) => (t.caps || []).find(a => a.id === id);
+    const toolsFor = id => m.tools.filter(t => assignOf(t, id));
     const capStatusAt = (id, i) => {
       const ts = toolsFor(id);
       if (!ts.length) return "n";
       let best = null;
       ts.forEach(t => {
-        const e = this.effective(t, i, range);
+        const e = this.effective(assignOf(t, id), i, range);
         if (best === null) best = e;
         else if (STATUS[e].rank > STATUS[best].rank) best = e;
       });
@@ -1020,7 +1077,7 @@ class Component extends DCLogic {
         remove: () => this.edit(mm => {
           const id = mm.stages[si].caps[ci].id;
           mm.stages[si].caps.splice(ci, 1);
-          mm.tools.forEach(t => { t.caps = (t.caps || []).filter(x => x !== id); });
+          mm.tools.forEach(t => { t.caps = (t.caps || []).filter(a => a.id !== id); });
         })
       })).map(o => Object.assign(o, { open: o.open && (o.matches.length > 0 || o.noneDisp === "block") })),
       add: () => this.edit(mm => {
@@ -1043,50 +1100,51 @@ class Component extends DCLogic {
       return i != null && i >= 0 && i <= maxStop;
     };
     const edTools = m.tools.map((t, ti) => {
-      const covOff = t.cov === "c" || t.cov === "x";
-      const startOff = t.cov !== "n";
-      const endOff = covOff;
       const missing = [];
       if (!t.name || !t.name.trim()) missing.push("name");
       if (!(t.caps || []).length) missing.push("capability");
-      if (!t.cov) missing.push("coverage state");
-      const setQ = (field, e) => {
-        const v = e.target.value === "" ? null : e.target.value;
-        this.edit(mm => { mm.tools[ti][field] = v; });
-      };
       return {
-        name: t.name, cov: t.cov || "",
-        start: inRange(t.startQ) ? t.startQ : "",
-        end: inRange(t.endQ) ? t.endQ : "",
-        startOff, endOff, startOp: startOff ? 0.45 : 1, endOp: endOff ? 0.45 : 1,
+        name: t.name,
         rowBg: missing.length ? "color-mix(in srgb, var(--color-surface) 70%, transparent)" : "var(--color-surface)",
-        stLabel: missing.length ? "Needs " + missing.join(" + ") : "Complete",
-        stFg: missing.length ? "var(--color-neutral-100)" : "var(--color-accent-200)",
+        stLabel: missing.length ? "Invalid" : "Valid",
+        stError: missing.length ? "Needs " + missing.join(" + ") : "",
+        stFg: missing.length ? "var(--color-invalid)" : "var(--color-valid)",
         stIcon: missing.length ? "ph-warning-circle" : "ph-check-circle",
-        chips: (t.caps || []).map((id, k) => {
-          const c = capMeta(id);
+        assigns: (t.caps || []).map((a, k) => {
+          const c = capMeta(a.id);
+          const startOff = a.cov !== "n";
+          const endOff = a.cov === "c" || a.cov === "x";
+          const setQ = (field, e) => {
+            const v = e.target.value === "" ? null : e.target.value;
+            this.edit(mm => { mm.tools[ti].caps[k][field] = v; });
+          };
           return {
             label: c ? c.label : "removed", icon: c ? c.icon : "ph-x",
+            cov: a.cov || "n",
+            start: inRange(a.startQ) ? a.startQ : "",
+            end: inRange(a.endQ) ? a.endQ : "",
+            startOff, endOff, startOp: startOff ? 0.45 : 1, endOp: endOff ? 0.45 : 1,
+            setCov: e => {
+              const v = e.target.value;
+              this.edit(mm => {
+                const x = mm.tools[ti].caps[k];
+                x.cov = v;
+                if (v === "c" || v === "x") { x.startQ = null; x.endQ = null; }
+                if (v === "p") x.startQ = null;
+              });
+            },
+            setStart: e => setQ("startQ", e),
+            setEnd: e => setQ("endQ", e),
             remove: () => this.edit(mm => { mm.tools[ti].caps.splice(k, 1); })
           };
         }),
         setName: e => { const v = e.target.value; this.edit(mm => { mm.tools[ti].name = v; }); },
-        setCov: e => {
-          const v = e.target.value;
-          this.edit(mm => {
-            mm.tools[ti].cov = v;
-            if (v === "c" || v === "x") { mm.tools[ti].startQ = null; mm.tools[ti].endQ = null; }
-            if (v === "p") mm.tools[ti].startQ = null;
-          });
-        },
-        setStart: e => setQ("startQ", e),
-        setEnd: e => setQ("endQ", e),
         addCap: e => {
           const v = e.target.value;
           if (!v) return;
           this.edit(mm => {
             const cs = mm.tools[ti].caps || (mm.tools[ti].caps = []);
-            if (cs.indexOf(v) < 0) cs.push(v);
+            if (!cs.some(a => a.id === v)) cs.push({ id: v, cov: "n", startQ: null, endQ: null, notes: {} });
           });
         },
         remove: () => this.edit(mm => { mm.tools.splice(ti, 1); })
@@ -1134,25 +1192,47 @@ class Component extends DCLogic {
           }),
           tools: toolsFor(c.id).map(t => {
             const ti = m.tools.indexOf(t);
+            const ki = t.caps.findIndex(x => x.id === c.id);
+            const a = t.caps[ki];
+            const others = t.caps.map((x, k) => ({ x, k })).filter(o => o.k !== ki);
             return {
               name: t.name || "untitled",
               cells: QUARTERS.map((q, i) => {
-                const key = t.id + ":" + i;
+                const key = t.id + ":" + c.id + ":" + i;
                 const qk = qKey(range, i);
-                const note = ((t.notes || {})[qk] || "");
+                const note = ((a.notes || {})[qk] || "");
+                const lineList = note.split("\n").map(l => l.trim()).filter(Boolean);
+                // append one line to other assignments of this tool at this quarter (skips duplicates)
+                const copyTo = (targets, text) => this.edit(mm => {
+                  targets.forEach(k => {
+                    const dst = mm.tools[ti].caps[k];
+                    const notes = dst.notes || (dst.notes = {});
+                    const have = String(notes[qk] || "").split("\n").map(l => l.trim()).filter(Boolean);
+                    if (have.indexOf(text) < 0) notes[qk] = have.concat([text]).join("\n");
+                  });
+                  this.setState({ copyMenu: null });
+                });
                 return {
-                  bar: toolBar(this.effective(t, i, range)),
+                  bar: toolBar(this.effective(a, i, range)),
                   note,
-                  lines: note.split("\n").map(l => l.trim()).filter(Boolean).map(text => ({ text })),
-                  emptyDisp: note.trim() ? "none" : "block",
-                  noteFg: note ? "var(--color-text)" : "var(--color-neutral-300)",
-                  noteBd: note ? "var(--color-accent-700)" : "var(--color-divider)",
+                  lines: lineList.map((text, li) => {
+                    const mk = key + ":" + li;
+                    return {
+                      text, canCopy: others.length > 0, menuOpen: st.copyMenu === mk,
+                      toggleMenu: () => this.setState(s2 => ({ copyMenu: s2.copyMenu === mk ? null : mk })),
+                      targets: others.map(o => ({ label: (capMeta(o.x.id) || {}).label || "removed", copy: () => copyTo([o.k], text) })),
+                      copyAll: () => copyTo(others.map(o => o.k), text),
+                      edit: () => this.setState({ noteEdit: key, copyMenu: null })
+                    };
+                  }),
+                  emptyNote: lineList.length === 0, hasNote: lineList.length > 0,
+                  noteBd: "var(--color-accent-700)",
                   editing: st.noteEdit === key, idle: st.noteEdit !== key,
                   edit: () => this.setState({ noteEdit: key }),
                   stop: () => this.setState({ noteEdit: null }),
                   setNote: e => {
                     const v = e.target.value;
-                    this.edit(mm => { (mm.tools[ti].notes || (mm.tools[ti].notes = {}))[qk] = v; });
+                    this.edit(mm => { (mm.tools[ti].caps[ki].notes || (mm.tools[ti].caps[ki].notes = {}))[qk] = v; });
                   }
                 };
               })
@@ -1216,14 +1296,18 @@ class Component extends DCLogic {
       rangeLabel: "Today is " + qName(range, 0) + " · roadmap runs to " + qName(range, QUARTERS.length - 1),
       addTool: () => this.edit(mm => {
         const ids = mm.tools.map(t => +String(t.id).replace(/\D/g, "")).concat([0]);
-        mm.tools.push({ id: "t" + (Math.max.apply(null, ids) + 1), name: "", caps: [], cov: "n", startQ: null, endQ: null, notes: {} });
+        mm.tools.push({ id: "t" + (Math.max.apply(null, ids) + 1), name: "", caps: [] });
       }),
-      resetModel: () => this.save(seedModel()),
+      confirmReset: !!st.confirmReset,
+      askReset: () => this.setState({ confirmReset: true }),
+      cancelReset: () => this.setState({ confirmReset: false }),
+      keepDialog: e => e.stopPropagation(),
+      doReset: () => { this.setState({ confirmReset: false }); this.save(seedModel()); },
       ioMsg: st.ioMsg || "", ioFg: st.ioBad ? "var(--color-neutral-100)" : "var(--color-accent-300)",
       fileRef: el => { if (el) this.fileEl = el; },
       openFile: () => { if (this.fileEl) this.fileEl.click(); },
       saveFile: () => {
-        const blob = new Blob([JSON.stringify({ format: "devops-loop", version: 4, model: m }, null, 2)], { type: "application/json" });
+        const blob = new Blob([JSON.stringify({ format: "devops-loop", version: 6, model: m }, null, 2)], { type: "application/json" });
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
         a.href = url;
