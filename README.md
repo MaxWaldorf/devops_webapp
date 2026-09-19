@@ -8,7 +8,7 @@ third-party tool logos, works offline.
 
 | Tab | What it does |
 | --- | --- |
-| **Lifecycle** | The loop. Focus auto-cycles through the stages, hover overrides it, click opens a detail panel. Layer toggles: core capabilities, coverage, tooling. Coverage also enables the readiness timeline slider. |
+| **Lifecycle** | The loop. Focus auto-cycles through the stages, hover overrides it, click opens a detail panel. Layer toggles: core capabilities, coverage, tooling. Coverage also enables the readiness timeline slider. Below 900px viewport width the loop is hidden and only the stage cards are shown. |
 | **Roadmap** | One horizontal section per stage: readiness per quarter, highlights, and a timeline row per tool with free-text notes. |
 | **Editor** | Edit the model: timeline range, stages and capabilities, tools table, Save/Load JSON. |
 

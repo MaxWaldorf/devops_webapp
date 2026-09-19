@@ -111,6 +111,8 @@ saturated floods. Icons are **Phosphor** (`@phosphor-icons/web@2.1.1`, `<i class
    full path via the Web Animations API (length measured with `getTotalLength`,
    so it never jumps). Layer toggles: Core capabilities, Coverage, Tooling.
    The Coverage layer also gates the readiness timeline slider.
+   Below 900px (`matchMedia`, `narrow` state) the loop, pills and centre panel are
+   not rendered; the stage-card grid underneath (which carries the same info) remains.
 2. **Roadmap** — one horizontal section per stage: stage readiness line per
    quarter (same colour/dash scale as the loop), highlights per quarter, then a
    sub-section per capability with one timeline row per tool. Each tool/quarter
