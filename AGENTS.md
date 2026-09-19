@@ -26,6 +26,7 @@ and toggleable layers for capabilities, coverage, tooling and roadmap.
 | `tools/build.py` | Builds both deliverables from `src/` (stdlib Python) and `--check`s they match. |
 | `tools/server.py` | Stdlib static server + per-browser model API (`/api/model`, `cid` cookie, files in `DATA_DIR`). |
 | `Dockerfile`, `docker-compose.yml` | Container: build stage runs build + check, `python:alpine` runs `tools/server.py` serving `dist/web`; model files in the `/data` volume. |
+| `renovate.json` | Renovate: weekly PRs for Actions, base image and dev tools; **only patch updates automerge**, minor/major need manual review. Vendored files aren't tracked. |
 | `Makefile`, `.dockerignore`, `.gitignore` | Shortcuts; keep `dist/`, `screenshots/`, `.data/` and `node_modules/` out of git and the image. |
 | `package.json`, `.stylelintrc.json`, `.htmlvalidate.json` | Dev-only lint tooling and rules for `make lint` (Node). The app itself has no Node dependencies. |
 | `dist/` | Generated, git-ignored. `dist/web/` (site) and `dist/standalone/devops-lifecycle.html` (single file). |

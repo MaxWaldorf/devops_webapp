@@ -45,6 +45,7 @@ The standalone file is for local use only and is never part of the hosted image.
 | `tools/server.py` | Static server plus the per-browser `/api/model` store (used by `make serve` and the image). |
 | `Dockerfile`, `docker-compose.yml` | Build stage runs build and check; the runtime image serves `dist/web` plus the model API with `tools/server.py`. |
 | `package.json`, `.stylelintrc.json`, `.htmlvalidate.json` | Dev-only lint tooling and its rules (the app has no Node dependencies). |
+| `renovate.json` | Renovate config: weekly dependency PRs (Actions, base image, dev tools); only patch updates automerge. |
 | `AGENTS.md` | Detailed working notes for contributors and agents. |
 
 `dist/` is generated and git-ignored; never edit it.
@@ -74,6 +75,11 @@ Full details are in [AGENTS.md](AGENTS.md).
 | Tag `vX.Y.Z` | `:X.Y.Z`, `:X.Y`, `:latest`. |
 
 Release: `git tag v1.2.3 && git push origin v1.2.3`.
+
+Dependencies (GitHub Actions, the `python` base image, dev lint tools) are kept current by
+[Renovate](https://docs.renovatebot.com/) via `renovate.json`: weekly PRs, and only **patch**
+updates automerge once the CI build passes; minor and major updates wait for a manual review.
+The vendored files in `src/vendor/` and `src/fonts/` are not tracked and are updated by hand.
 
 ## License
 
