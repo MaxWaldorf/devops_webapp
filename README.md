@@ -51,7 +51,7 @@ The standalone file is for local use only and is never part of the hosted image.
 
 ## Data model
 
-On the hosted site the model (schema 4) is stored **server-side**, one JSON file per
+On the hosted site the model (schema 6) is stored **server-side**, one JSON file per
 browser under `DATA_DIR` (`/data` in the container, the `devops-data` volume in compose),
 keyed by a random `cid` cookie via `GET/PUT /api/model` (`tools/server.py`). A returning
 browser gets its model back; there are no accounts, so clearing cookies or switching
@@ -59,6 +59,7 @@ browser starts fresh. The standalone `file://` build, or any static server witho
 API, falls back to `localStorage` under `devops-loop-model-v3`. The model can also be
 exported and imported as JSON from the Editor tab; use that to move data between them.
 Quarter keys are absolute (`"YYYY-Qn"`), so changing the timeline range never loses data.
+Each tool lists its capabilities, and every tool→capability assignment carries its own current coverage state, start and end quarter, and its own roadmap notes (a note line can be copied to the tool's other capabilities from the Roadmap tab). Older models are migrated on load.
 Full details are in [AGENTS.md](AGENTS.md).
 
 ## Releases and CI

@@ -295,6 +295,8 @@
   --color-accent-2: #a7a1db; /* the machine-derived stand-in follows: same
      hue, same L 0.734, chroma at the same 2:3 proportion it held */
   --color-divider: color-mix(in srgb, #e9e9ed 16%, transparent);
+  --color-valid: #5fd08a;
+  --color-invalid: #ff6b6b;
 
   /* Tonal ramps — generated in OKLCH on one shared lightness scale, so the
      same step of any role matches the others in visual value. */
@@ -2170,6 +2172,7 @@ select.input option { background: var(--color-surface); color: var(--color-text)
 .u-flex { display:flex; }
 .u-font-size-11-5px { font-size:11.5px; }
 .u-font-size-11px { font-size:11px; }
+.u-gap-2px { gap:2px; }
 .u-font-size-12-5px { font-size:12.5px; }
 .u-font-size-12px { font-size:12px; }
 .u-font-size-14px { font-size:14px; }
@@ -2185,6 +2188,7 @@ select.input option { background: var(--color-surface); color: var(--color-text)
 .u-grid { display:grid; }
 .u-height-4px { height:4px; }
 .u-items-center { align-items:center; }
+.u-justify-self-start { justify-self:start; }
 .u-line-height-1-35 { line-height:1.35; }
 .u-margin-left-auto { margin-left:auto; }
 .u-no-shrink { flex:none; }
@@ -2291,8 +2295,9 @@ select.input option { background: var(--color-surface); color: var(--color-text)
 .c-padding-7px-9px_line-height-1-45_resize-vertical { padding:7px 9px; line-height:1.45; resize:vertical; font-family:var(--font-body); }
 .c-overflow-x-auto_padding-bottom-4px { overflow-x:auto; padding-bottom:4px; }
 .c-min-width-1080px { min-width:1080px; }
-.c-grid-template-columns_padding-0-4px-6px_font-size-10px { grid-template-columns:170px minmax(280px,1fr) 140px 120px 120px 132px 34px; padding:0 4px 6px; font-size:10px; letter-spacing:.13em; border-bottom:1px solid var(--color-divider); }
-.c-grid-template-columns_padding-10px-4px { grid-template-columns:170px minmax(280px,1fr) 140px 120px 120px 132px 34px; padding:10px 4px; }
+.c-ed-head { grid-template-columns:170px minmax(640px,1fr) 132px 34px; padding:0 4px 6px; font-size:10px; letter-spacing:.13em; border-bottom:1px solid var(--color-divider); }
+.c-ed-row { grid-template-columns:170px minmax(640px,1fr) 132px 34px; padding:10px 4px; }
+.c-ed-assign { grid-template-columns:minmax(160px,1fr) 140px 120px 120px 18px; }
 .c-padding-2px-4px-2px-8p_border-radius-6px_background-color { padding:2px 4px 2px 8px; border-radius:6px; background:var(--color-accent-900); color:var(--color-accent-200); border:1px solid var(--color-accent-700); }
 .c-width-18px_height-18px_font-size-10px { width:18px; height:18px; font-size:10px; color:var(--color-accent-200); }
 .c-padding-4px-6px_max-width-260px { padding:4px 6px; max-width:260px; }
@@ -2312,3 +2317,10 @@ select.input option { background: var(--color-surface); color: var(--color-text)
 .c-align-items-stretch_gap-3px_justify-content-flex-s { align-items:stretch; gap:3px; justify-content:flex-start; text-align:left; padding:4px 7px; font:400 11.5px/1.35 var(--font-body); min-height:24px; white-space:normal; }
 .c-width-4px_background-accen_margin-top-5px { width:4px; background:var(--color-accent-400); margin-top:5px; }
 .c-flex-1 { flex:1; }
+.c-note-box { padding:4px 6px; border-radius:6px; }
+.c-note-line { flex:1; display:flex; align-items:flex-start; gap:6px; justify-content:flex-start; text-align:left; padding:0; border:0; background:none; font-size:11.5px; line-height:1.35; height:auto; min-height:0; }
+.c-copy-menu { padding:4px; border:1px solid var(--color-divider); border-radius:6px; }
+.c-copy-item { justify-content:flex-start; font-size:11px; padding:3px 6px; height:auto; min-height:0; }
+.c-modal-top { z-index:100; }
+.c-note-add { align-self:flex-start; width:26px; height:26px; min-height:0; padding:0; justify-content:center; border:1px dashed var(--color-divider); border-radius:6px; font-size:12px; opacity:.5; }
+.c-note-add:hover { opacity:1; }

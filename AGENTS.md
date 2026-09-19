@@ -114,14 +114,14 @@ saturated floods. Icons are **Phosphor** (`@phosphor-icons/web@2.1.1`, `<i class
 2. **Roadmap** — one horizontal section per stage: stage readiness line per
    quarter (same colour/dash scale as the loop), highlights per quarter, then a
    sub-section per capability with one timeline row per tool. Each tool/quarter
-   cell holds a free-text note (click to edit, one bullet per line).
+   cell holds a free-text note per tool *and capability* (click to edit, one bullet per line); each line has a copy button to append it to the same tool's other capabilities ("Copy to X" / "Copy to all").
 3. **Editor** (styled with the neutral ramp so it reads as a tool tab) — the
    model editor: timeline range, stages & capabilities, tools table,
    Save/Load JSON.
 
 ## Data model
 
-Held in component state, `schema: 4`. Persistence: over http(s) with `/api/model`
+Held in component state, `schema: 6`. Persistence: over http(s) with `/api/model`
 present it is stored **server-side per browser** (cookie `cid`, debounced PUT, no
 localStorage); on `file://` or without the API it falls back to `localStorage` key
 **`devops-loop-model-v3`**.
@@ -143,9 +143,10 @@ that never edits keeps getting the seed.
     { name, icon, caps: [{ id, label, icon }], highlights: { "2027-Q1": "line\nline" } }
   ],
   tools: [
-    { id, name, caps: [capId], cov: "c"|"p"|"n"|"x",
-      startQ: "2027-Q1"|null, endQ: "2027-Q3"|null,
-      notes: { "2027-Q2": "line\nline" } }
+    { id, name,
+      caps: [{ id: capId, cov: "c"|"p"|"n"|"x",           // one entry per assigned capability
+               startQ: "2027-Q1"|null, endQ: "2027-Q3"|null,
+               notes: { "2027-Q2": "line\nline" } }] }   // independent per capability
   ]
 }
 ```
@@ -164,15 +165,15 @@ Rules that matter:
   capabilities with covered 1, partial 0.5, not covered 0, out-of-scope
   excluded. The loop stroke colour/dash reads that %: ≥95 solid light accent,
   ≥70 solid, ≥45 long dash, ≥20 short dash, else fine grey dots.
-- **Tool coverage over time**: `Covered` always; `Partially` until `endQ` then
+- **Tool coverage over time** (per tool→capability assignment, not per tool): `Covered` always; `Partially` until `endQ` then
   covered; `Not covered` until `startQ` (then partial) and covered from `endQ`;
   `Not in scope` never changes.
-- **Completeness** of a tool row = name + ≥1 capability + coverage state.
-  Dates are optional; incomplete rows are dimmed and labelled "Needs …".
+- **Completeness** of a tool row = name + ≥1 capability (each assignment always has a
+  coverage state). Dates are optional; the Check column shows Valid (green) or Invalid (red, with "Needs …" below) and invalid rows are dimmed.
 - **Range changes are non-destructive**: out-of-range dates and highlights are
   kept in the model and simply hidden (selects show "—").
 
-Save JSON writes `{ format: "devops-loop", version: 4, model }`; Load accepts
+Save JSON writes `{ format: "devops-loop", version: 6, model }`; Load accepts
 that wrapper or a bare model, validates the shape, migrates, then saves.
 
 ## Conventions to keep
