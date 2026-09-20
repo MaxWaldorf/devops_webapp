@@ -73,7 +73,7 @@
       </div>
     </sc-if>
 
-    <div class="u-flex u-wrap u-gap-10px u-items-center c-padding-18px-clamp-16p-2">
+    <div class="u-flex u-wrap u-gap-10px u-items-center c-padding-18px-clamp-16p-2 c-layers-row">
       <span class="u-font-size-11px u-upper u-color-accent-300 c-letter-spacing-12em_margin-right-4px">Layers</span>
       <sc-for list="{{toggles}}" as="tg" hint-placeholder-count="3">
         <button type="button" class="btn u-gap-8px" style="background:{{tg.bg}};border:1px solid {{tg.bd}};color:{{tg.fg}}" sc-camel-on-click="{{tg.onClick}}">
@@ -181,7 +181,7 @@
     <div class="c-padding-26px-clamp-16p">
       <div class="u-grid u-gap-12px u-align-items-start c-grid-template-columns">
         <sc-for list="{{stages}}" as="st" hint-placeholder-count="8">
-          <div class="u-flex u-col u-border-radius-8px u-background-surface c-gap-11px_padding-14px_transition-border-colo" style="border:1px solid {{st.cardBd}};box-shadow:{{st.cardShadow}}" sc-camel-on-mouse-enter="{{st.onEnter}}">
+          <div class="u-flex u-col u-border-radius-8px u-background-surface c-gap-11px_padding-14px_transition-border-colo c-cursor-pointer" style="border:1px solid {{st.cardBd}};box-shadow:{{st.cardShadow}}" sc-camel-on-mouse-enter="{{st.onEnter}}" sc-camel-on-click="{{st.onSelect}}">
             <div class="u-flex u-items-center u-gap-9px">
               <span class="u-grid u-place-center u-font-size-15px c-width-26px_height-26px_border-radius-7px" style="background:{{st.iconBg}};color:{{st.iconFg}}"><i class="ph {{st.icon}}"></i></span>
               <span class="c-font-500-16px-1-font-h">{{st.name}}</span>
@@ -798,7 +798,7 @@ class Component extends DCLogic {
     }
     const ms = Math.max(800, (this.props.cycleSeconds ?? 3) * 1000);
     this.timer = setInterval(() => {
-      if (this.props.autoCycle === false || this.state.tab !== "loop") return;
+      if (this.props.autoCycle === false || this.state.tab !== "loop" || this.state.narrow) return;
       if (this.state.hover !== null || this.state.selected !== null) return;
       this.setState(s => ({ cursor: (s.cursor + 1) % 8 }));
     }, ms);
@@ -870,7 +870,7 @@ class Component extends DCLogic {
     const QUARTERS = quarterList(range);
     const cov = st.coverage;
     const stopIdx = Math.min(QUARTERS.length - 1, Math.round(st.tPos));
-    const focus = st.selected !== null ? st.selected : st.hover !== null ? st.hover : st.cursor;
+    const focus = st.narrow ? null : st.selected !== null ? st.selected : st.hover !== null ? st.hover : st.cursor;
 
     const assignOf = (t, id) => (t.caps || []).find(a => a.id === id);
     const toolsFor = id => m.tools.filter(t => assignOf(t, id));
@@ -954,8 +954,8 @@ class Component extends DCLogic {
         nameFg: on ? "var(--color-accent-100)" : "var(--color-text)",
         cardBd: on ? "var(--color-accent-600)" : "var(--color-divider)",
         cardShadow: on ? "0 0 0 1px var(--color-accent-700), 0 10px 30px rgba(0,0,0,.55)" : "var(--shadow-sm)",
-        onEnter: () => this.setState({ hover: i }),
-        onSelect: () => this.setState({ selected: i, hover: i })
+        onEnter: () => { if (!st.narrow) this.setState({ hover: i }); },
+        onSelect: () => { if (!st.narrow) this.setState({ selected: i, hover: i }); }
       };
     });
 
