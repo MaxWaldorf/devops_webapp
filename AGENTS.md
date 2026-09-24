@@ -115,12 +115,14 @@ saturated floods. Icons are **Phosphor** (`@phosphor-icons/web@2.1.1`, `<i class
    Below 900px (`matchMedia`, `narrow` state) the loop, pills and centre panel are
    not rendered; the stage-card grid underneath (which carries the same info) remains.
 2. **Roadmap** — one horizontal section per stage: stage readiness line per
-   quarter (same colour/dash scale as the loop), highlights per quarter, then a
+   quarter (same colour/dash scale as the loop), highlights per quarter (click a
+   cell to edit, one bullet per line; the row sits on a tinted band, `c-hl-band`), then a
    sub-section per capability with one timeline row per tool. Each tool/quarter
    cell holds a free-text note per tool *and capability* (click to edit, one bullet per line); each line has a copy button to append it to the same tool's other capabilities ("Copy to X" / "Copy to all").
 3. **Editor** (styled with the neutral ramp so it reads as a tool tab) — the
-   model editor: timeline range, stages & capabilities, tools table,
-   Save/Load JSON.
+   model editor: timeline range, stages & capabilities, tools table (each
+   tool→capability assignment has a free-text Note field, stored as `remark`),
+   Save/Load JSON. Highlights are edited on the Roadmap tab, not here.
 
 ## Data model
 
@@ -149,6 +151,7 @@ that never edits keeps getting the seed.
     { id, name,
       caps: [{ id: capId, cov: "c"|"p"|"n"|"x",           // one entry per assigned capability
                startQ: "2027-Q1"|null, endQ: "2027-Q3"|null,
+               remark: "free text",                   // optional, Editor "Note" column
                notes: { "2027-Q2": "line\nline" } }] }   // independent per capability
   ]
 }

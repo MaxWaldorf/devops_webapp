@@ -329,19 +329,6 @@
               </div>
             </sc-for>
             <button type="button" class="btn btn-primary u-gap-7px c-align-self-flex-start_border-1px-solid-color_color-a" sc-camel-on-click="{{es.add}}"><i class="ph ph-plus"></i>Add capability</button>
-
-            <div class="u-flex u-col u-gap-7px c-padding-top-11px_border-top-1px-solid-c">
-              <div class="u-flex u-items-center u-gap-9px u-wrap">
-                <span class="u-upper u-color-accent-300 c-font-400-9-5px-1-font_letter-spacing-13em">Highlights of</span>
-                <sc-raw-select class="input u-font-size-12px u-no-shrink c-padding-4px-6px_width-auto" value="{{es.hlQ}}" sc-camel-on-change="{{es.setHlQ}}">
-                  <sc-for list="{{quarterAllOptions}}" as="qa" hint-placeholder-count="6">
-                    <option value="{{qa.v}}">{{qa.n}}</option>
-                  </sc-for>
-                </sc-raw-select>
-                <span class="u-margin-left-auto u-font-size-11px u-color-neutral-300">one bullet per line</span>
-              </div>
-              <textarea class="input u-font-size-12-5px c-padding-7px-9px_line-height-1-45_resize-vertical" rows="4" placeholder="One highlight per line" value="{{es.hlText}}" sc-camel-on-change="{{es.setHl}}" sc-camel-on-input="{{es.setHl}}"></textarea>
-            </div>
           </div>
         </sc-for>
       </div>
@@ -353,10 +340,10 @@
         <span class="u-font-size-12px u-color-neutral-300">a tool can face several capabilities — each with its own coverage state and dates</span>
       </div>
       <div class="c-overflow-x-auto_padding-bottom-4px">
-        <div class="u-flex u-col u-gap-8px c-min-width-1080px">
+        <div class="u-flex u-col u-gap-8px c-min-width-1270px">
           <div class="u-grid u-gap-10px u-upper u-color-accent-300 c-ed-head">
             <span>Tool</span>
-            <div class="u-grid u-gap-10px c-ed-assign"><span>Core capability</span><span>Coverage state (current)</span><span>Start quarter</span><span>End quarter</span><span></span></div>
+            <div class="u-grid u-gap-10px c-ed-assign"><span>Core capability</span><span>Coverage state (current)</span><span>Start quarter</span><span>End quarter</span><span>Note</span><span></span></div>
             <span>Check</span><span></span>
           </div>
           <sc-for list="{{edTools}}" as="tt" hint-placeholder-count="6">
@@ -381,6 +368,7 @@
                         <option value="{{qo.v}}">{{qo.n}}</option>
                       </sc-for>
                     </sc-raw-select>
+                    <input type="text" class="input u-font-size-12-5px c-padding-5px-6px" value="{{as.remark}}" placeholder="Remarks…" title="{{as.remark}}" sc-camel-on-change="{{as.setRemark}}" sc-camel-on-input="{{as.setRemark}}">
                     <button aria-label="Unassign" type="button" class="btn btn-icon c-width-18px_height-18px_font-size-10px" title="Unassign" sc-camel-on-click="{{as.remove}}"><i class="ph ph-x"></i></button>
                   </div>
                 </sc-for>
@@ -412,7 +400,7 @@
   <div class="u-flex u-col c-padding-8px-clamp-16px_gap-26px">
     <div class="c-max-width-720px">
       <h1 class="c-font-size-36px_margin-0-0-8px">Roadmap overview</h1>
-      <p class="c-margin-0_font-size-14-5px_color-neutral-20">{{rangeLabel}}. Each stage carries its readiness line, its highlights per quarter, and — under every capability — one line per tool where you can note what happens that quarter.</p>
+      <p class="c-margin-0_font-size-14-5px_color-neutral-20">{{rangeLabel}}. Each stage carries its readiness line, its highlights per quarter (click a quarter to edit), and — under every capability — one line per tool where you can note what happens that quarter.</p>
     </div>
 
     <sc-for list="{{rmStages}}" as="rs" hint-placeholder-count="8">
@@ -436,18 +424,28 @@
           </sc-for>
         </div>
 
-        <sc-if value="{{rs.hasHl}}">
-          <div class="u-grid u-gap-8px u-align-items-start" style="grid-template-columns:{{cols}}">
-            <span class="u-upper u-color-accent-300 c-font-400-9-5px-1-font_letter-spacing-13em">Highlights</span>
-            <sc-for list="{{rs.hlCells}}" as="hc" hint-placeholder-count="5">
-              <div class="u-flex u-col c-gap-4px">
-                <sc-for list="{{hc.lines}}" as="ln" hint-placeholder-count="1">
-                  <div class="u-flex u-align-items-flex-start u-gap-6px"><span class="u-height-4px u-round u-no-shrink c-width-4px_background-accen_margin-top-6px"></span><span class="u-font-size-11-5px u-line-height-1-35">{{ln.text}}</span></div>
-                </sc-for>
-              </div>
-            </sc-for>
-          </div>
-        </sc-if>
+        <div class="u-grid u-gap-8px u-align-items-start c-hl-band" style="grid-template-columns:{{cols}}">
+          <span class="u-upper u-color-accent-300 c-font-400-9-5px-1-font_letter-spacing-13em">Highlights</span>
+          <sc-for list="{{rs.hlCells}}" as="hc" hint-placeholder-count="5">
+            <div class="u-flex u-col c-gap-4px">
+              <sc-if value="{{hc.editing}}">
+                <textarea class="input u-font-size-11-5px u-line-height-1-35 c-padding-5px-7px_resize-vertical_font-family-font-body" rows="3" placeholder="One highlight per line" value="{{hc.text}}" sc-camel-on-change="{{hc.setText}}" sc-camel-on-input="{{hc.setText}}" sc-camel-on-blur="{{hc.stop}}"></textarea>
+              </sc-if>
+              <sc-if value="{{hc.idle}}">
+                <sc-if value="{{hc.empty}}">
+                  <button aria-label="Add highlight" title="Add highlight" type="button" class="btn c-note-add" sc-camel-on-click="{{hc.edit}}"><i class="ph ph-plus"></i></button>
+                </sc-if>
+                <sc-if value="{{hc.hasLines}}">
+                  <button type="button" class="btn c-hl-lines" title="Edit highlights" sc-camel-on-click="{{hc.edit}}">
+                    <sc-for list="{{hc.lines}}" as="ln" hint-placeholder-count="1">
+                      <span class="u-flex u-align-items-flex-start u-gap-6px"><span class="u-height-4px u-round u-no-shrink c-width-4px_background-accen_margin-top-6px"></span><span class="u-font-size-11-5px u-line-height-1-35">{{ln.text}}</span></span>
+                    </sc-for>
+                  </button>
+                </sc-if>
+              </sc-if>
+            </div>
+          </sc-for>
+        </div>
 
         <sc-for list="{{rs.caps}}" as="rc" hint-placeholder-count="4">
           <div class="u-flex u-col u-gap-7px c-padding-top-11px_border-top-1px-solid-c">
@@ -715,7 +713,7 @@ function loadModel() {
 }
 
 class Component extends DCLogic {
-  state = { allIcons: null, iconBuf: {}, iconOpen: null, drag: null, dragOver: null, dropAt: null, tab: "loop", menuOpen: false, narrow: false, cursor: 0, hover: null, selected: null, tPos: 0, caps: true, coverage: true, tools: false, hlQ: [0, 0, 0, 0, 0, 0, 0, 0], model: loadModel() };
+  state = { allIcons: null, iconBuf: {}, iconOpen: null, drag: null, dragOver: null, dropAt: null, tab: "loop", menuOpen: false, narrow: false, cursor: 0, hover: null, selected: null, tPos: 0, caps: true, coverage: true, tools: false, model: loadModel() };
 
   flash(msg, bad) {
     this.setState({ ioMsg: msg, ioBad: !!bad });
@@ -1028,13 +1026,6 @@ class Component extends DCLogic {
       onDragOver: e => { if (drag) { e.preventDefault(); if (st.dragOver !== si) this.setState({ dragOver: si }); } },
       onDragLeave: () => { if (st.dragOver === si) this.setState({ dragOver: null }); },
       onDropEnd: e => { if (!drag) return; e.preventDefault(); moveCap(si, null); },
-      hlQ: String(st.hlQ[si] || 0),
-      hlText: String((s.highlights || {})[qKey(range, st.hlQ[si] || 0)] || ""),
-      setHlQ: e => { const v = +e.target.value; this.setState(ss => { const a = ss.hlQ.slice(); a[si] = v; return { hlQ: a }; }); },
-      setHl: e => {
-        const v = e.target.value, q = qKey(range, st.hlQ[si] || 0);
-        this.edit(mm => { (mm.stages[si].highlights || (mm.stages[si].highlights = {}))[q] = v; });
-      },
       caps: s.caps.map((c, ci) => ({
         icon: c.icon, label: c.label,
         dragOp: drag && drag.si === si && drag.ci === ci ? 0.4 : 1,
@@ -1140,6 +1131,8 @@ class Component extends DCLogic {
             start: inRange(a.startQ) ? a.startQ : "",
             end: inRange(a.endQ) ? a.endQ : "",
             startOff, endOff, startOp: startOff ? 0.45 : 1, endOp: endOff ? 0.45 : 1,
+            remark: a.remark || "",
+            setRemark: e => { const v = e.target.value; this.edit(mm => { mm.tools[ti].caps[k].remark = v; }); },
             setCov: e => {
               const v = e.target.value;
               this.edit(mm => {
@@ -1188,13 +1181,24 @@ class Component extends DCLogic {
     }));
 
     const rmStages = st.tab !== "roadmap" ? [] : m.stages.map((s, si) => {
-      const hlCells = QUARTERS.map((q, i) => ({
-        lines: String((s.highlights || {})[qKey(range, i)] || "").split("\n").map(l => l.trim()).filter(Boolean).map(text => ({ text }))
-      }));
+      const hlCells = QUARTERS.map((q, i) => {
+        const qk = qKey(range, i), key = "hl:" + si + ":" + i;
+        const text = String((s.highlights || {})[qk] || "");
+        const lines = text.split("\n").map(l => l.trim()).filter(Boolean).map(t2 => ({ text: t2 }));
+        return {
+          text, lines, empty: lines.length === 0, hasLines: lines.length > 0,
+          editing: st.noteEdit === key, idle: st.noteEdit !== key,
+          edit: () => this.setState({ noteEdit: key, copyMenu: null }),
+          stop: () => this.setState({ noteEdit: null }),
+          setText: e => {
+            const v = e.target.value;
+            this.edit(mm => { (mm.stages[si].highlights || (mm.stages[si].highlights = {}))[qk] = v; });
+          }
+        };
+      });
       return {
         name: s.name, icon: s.icon,
         summary: s.caps.length + " capabilities · " + Math.round(scoreAt(s, QUARTERS.length - 1) * 100) + "% by " + QUARTERS[QUARTERS.length - 1],
-        hasHl: hlCells.some(c => c.lines.length),
         hlCells,
         stageCells: QUARTERS.map((q, i) => {
           const sc2 = scoreAt(s, i);
@@ -1307,7 +1311,6 @@ class Component extends DCLogic {
       iconCount: iconSet.length + " icons",
       covOptions: [{ v: "c", n: "Covered" }, { v: "p", n: "Partially" }, { v: "n", n: "Not covered" }, { v: "x", n: "Not in scope" }],
       quarterOptions: [{ v: "", n: "—" }].concat(QUARTERS.map((q, i) => ({ v: qKey(range, i), n: i === 0 ? "Today (" + qName(range, 0) + ")" : q }))),
-      quarterAllOptions: QUARTERS.map((q, i) => ({ v: String(i), n: i === 0 ? "Today (" + qName(range, 0) + ")" : q })),
       modelSummary: capCount + " capabilities · " + m.tools.length + " tool rows · " + QUARTERS.length + " quarters",
       rangeGroups: [
         { title: "Today", hint: "where the loop starts", fields: rangeFields.filter(fd => fd.group === 0) },
