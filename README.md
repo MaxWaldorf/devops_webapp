@@ -9,8 +9,8 @@ third-party tool logos, works offline.
 | Tab | What it does |
 | --- | --- |
 | **Lifecycle** | The loop. Focus auto-cycles through the stages, hover overrides it, click opens a detail panel. Layer toggles: core capabilities, coverage, tooling. Coverage also enables the readiness timeline slider. Below 900px viewport width the loop is hidden and only the stage cards are shown. |
-| **Roadmap** | One horizontal section per stage: readiness per quarter, highlights, and a timeline row per tool with free-text notes. |
-| **Editor** | Edit the model: timeline range, stages and capabilities, tools table, Save/Load JSON. |
+| **Roadmap** | One horizontal section per stage: readiness per quarter, highlights per quarter (edited in place, on a tinted band), and a timeline row per tool with free-text notes. |
+| **Editor** | Edit the model: timeline range, stages and capabilities, tools table (with a note per tool→capability assignment), Save/Load JSON. |
 
 Readiness is derived from the model, never stored: a capability takes the best status
 among its tools at the selected quarter, and a stage's percentage is the mean of its
@@ -60,7 +60,7 @@ browser starts fresh. The standalone `file://` build, or any static server witho
 API, falls back to `localStorage` under `devops-loop-model-v3`. The model can also be
 exported and imported as JSON from the Editor tab; use that to move data between them.
 Quarter keys are absolute (`"YYYY-Qn"`), so changing the timeline range never loses data.
-Each tool lists its capabilities, and every tool→capability assignment carries its own current coverage state, start and end quarter, and its own roadmap notes (a note line can be copied to the tool's other capabilities from the Roadmap tab). Older models are migrated on load.
+Each tool lists its capabilities, and every tool→capability assignment carries its own current coverage state, start and end quarter, an optional free-text remark (Editor), and its own roadmap notes (a note line can be copied to the tool's other capabilities from the Roadmap tab). Older models are migrated on load.
 Full details are in [AGENTS.md](AGENTS.md).
 
 ## Releases and CI
