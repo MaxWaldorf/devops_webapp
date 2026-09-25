@@ -10,7 +10,7 @@ The standalone is a mechanical inlining of src/index.html (every local
 the two cannot drift. Both carry the same build id (a hash of all of src/),
 and `build.py --check` verifies that.
 """
-import base64, hashlib, mimetypes, re, shutil, sys
+import base64, hashlib, json, mimetypes, re, shutil, sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -73,6 +73,10 @@ def check():
     left += re.findall(r'<link[^>]*stylesheet[^>]*>', STANDALONE.read_text(encoding="utf8"))
     if len(set(ids.values())) != 1 or left:
         sys.exit(f"OUT OF SYNC: {ids} unresolved refs in standalone: {left}")
+    css = sorted(set(re.findall(r'^\.ph\.ph-([a-z0-9-]+)::?before', (SRC / "styles.css").read_text(encoding="utf8"), re.M)))
+    js = re.search(r'PHOSPHOR_ICONS = (\[.*?\]);', (SRC / "vendor" / "phosphor-icons.js").read_text(encoding="utf8"))
+    if not js or json.loads(js.group(1)) != css:
+        sys.exit(f"src/vendor/phosphor-icons.js does not match the {len(css)} icons in src/styles.css")
     leaked = [f.name for f in WEB.rglob("*") if f.name == STANDALONE.name]
     if leaked:
         sys.exit(f"standalone must not be in the web package: {leaked}")
