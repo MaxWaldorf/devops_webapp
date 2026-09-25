@@ -20,7 +20,7 @@ and toggleable layers for capabilities, coverage, tooling and roadmap.
 | --- | --- |
 | `src/index.html` | The design (template + logic class). Edit this. |
 | `src/styles.css` | Nocturne tokens/component classes, `@font-face` (Inter, Phosphor), page base styles, `u-…` utilities and `c-…` classes for the template's static styling. Linked from `<head>`. |
-| `src/vendor/` | DC runtime (`dc-support.js`), React 18.3.1 UMD, Nocturne `ds-bundle.js`. |
+| `src/vendor/` | DC runtime (`dc-support.js`), React 18.3.1 UMD, Nocturne `ds-bundle.js`, Phosphor icon names (`phosphor-icons.js`). |
 | `src/fonts/` | Inter (7 subsets, variable) + Phosphor icon font, woff2 only. |
 | `README.md` | Public overview. Keep it current (see Conventions). |
 | `tools/build.py` | Builds both deliverables from `src/` (stdlib Python) and `--check`s they match. |
@@ -208,12 +208,12 @@ that wrapper or a bare model, validates the shape, migrates, then saves.
   vendor Phosphor CSS, custom template elements and `{{…}}` placeholders).
 - Template holes are dotted lookups only; compute everything in `renderVals()`.
 - Never store anything in `localStorage` other than the model key above (and only in the fallback mode).
-- Capability icons: the editor's type-to-search list is meant to read all ~1,530
-  Phosphor names from a `<link href*="phosphor">` stylesheet at runtime. The
-  Phosphor CSS now lives in `src/styles.css` (no such `<link>`), so that fetch never runs
-  and the editor always uses the curated `ICONS` array. Known gap: to restore the full
-  list, read the names from the loaded stylesheet (`document.styleSheets`) in
-  `componentDidMount` instead of fetching. Do not re-add a `<link>` to a CDN.
+- Capability icons: the editor lists all ~1,530 Phosphor names from
+  `src/vendor/phosphor-icons.js` (`window.PHOSPHOR_ICONS`, loaded as a script so it also
+  works when `src/index.html` is opened from `file://`, where stylesheet rules are
+  unreadable). Focusing the field lists them all, typing filters. `make check` fails if the
+  list differs from the `.ph.ph-…::before` rules in `src/styles.css`; regenerate it when
+  updating Phosphor. The curated `ICONS` array is only a fallback. Do not re-add a `<link>` to a CDN.
 
 ## Placeholders to replace with real data
 

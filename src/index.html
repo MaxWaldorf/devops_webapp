@@ -7,6 +7,7 @@
 <script src="vendor/react.production.min.js"></script>
 <script src="vendor/react-dom.production.min.js"></script>
 <script src="vendor/dc-support.js"></script>
+<script src="vendor/phosphor-icons.js"></script>
 <link rel="stylesheet" href="styles.css">
 
 </head>
@@ -713,7 +714,7 @@ function loadModel() {
 }
 
 class Component extends DCLogic {
-  state = { allIcons: null, iconBuf: {}, iconOpen: null, drag: null, dragOver: null, dropAt: null, tab: "loop", menuOpen: false, narrow: false, cursor: 0, hover: null, selected: null, tPos: 0, caps: true, coverage: true, tools: false, model: loadModel() };
+  state = { allIcons: Array.isArray(window.PHOSPHOR_ICONS) ? window.PHOSPHOR_ICONS : null, iconBuf: {}, iconOpen: null, drag: null, dragOver: null, dropAt: null, tab: "loop", menuOpen: false, narrow: false, cursor: 0, hover: null, selected: null, tPos: 0, caps: true, coverage: true, tools: false, model: loadModel() };
 
   flash(msg, bad) {
     this.setState({ ioMsg: msg, ioBad: !!bad });
@@ -783,17 +784,6 @@ class Component extends DCLogic {
     this.mqH = () => this.setState({ narrow: this.mq.matches });
     this.mqH();
     this.mq.addEventListener("change", this.mqH);
-    const link = document.querySelector('link[href*="phosphor"]');
-    if (link) {
-      fetch(link.href).then(r => r.text()).then(css => {
-        const set = {};
-        const re = /\.ph\.ph-([a-z0-9-]+):before/g;
-        let mm;
-        while ((mm = re.exec(css))) set[mm[1]] = 1;
-        const all = Object.keys(set).sort();
-        if (all.length > 50) this.setState({ allIcons: all });
-      }).catch(() => {});
-    }
     const ms = Math.max(800, (this.props.cycleSeconds ?? 3) * 1000);
     this.timer = setInterval(() => {
       if (this.props.autoCycle === false || this.state.tab !== "loop" || this.state.narrow) return;
@@ -1067,11 +1057,11 @@ class Component extends DCLogic {
         matches: (() => {
           const k = si + ":" + ci;
           if (st.iconOpen !== k) return [];
-          if (st.iconBuf[k] == null) return [];
-          const q = String(st.iconBuf[k]).trim().toLowerCase().replace(/\s+/g, "-");
-          if (iconSet.indexOf(q) >= 0) return [];
+          // Not typed yet (or cleared): browse the whole list.
+          const q = String(st.iconBuf[k] != null ? st.iconBuf[k] : "").trim().toLowerCase().replace(/\s+/g, "-");
+          if (q && iconSet.indexOf(q) >= 0) return [];
           const pool = q ? iconSet.filter(n => n.indexOf(q) >= 0).sort((x, y) => x.indexOf(q) - y.indexOf(q) || x.length - y.length) : iconSet;
-          return pool.slice(0, 40).map(n => ({
+          return pool.map(n => ({
             name: n, cls: "ph-" + n,
             pick: e => {
               e.preventDefault();

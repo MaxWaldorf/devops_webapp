@@ -40,7 +40,7 @@ The standalone file is for local use only and is never part of the hosted image.
 | --- | --- |
 | `src/index.html` | The whole design (template and logic). The single source of truth; edit this. |
 | `src/styles.css` | Design-system tokens, component classes, font faces, base styles and the template's static styling; only data-driven styles stay inline in `index.html` (separate file on the hosted site, inlined into the standalone). |
-| `src/vendor/`, `src/fonts/` | Vendored React, DC runtime, design-system bundle, Inter and Phosphor fonts. |
+| `src/vendor/`, `src/fonts/` | Vendored React, DC runtime, design-system bundle, Phosphor icon-name list, Inter and Phosphor fonts. |
 | `tools/build.py` | Builds the site and the standalone file and checks they match. |
 | `tools/server.py` | Static server plus the per-browser `/api/model` store (used by `make serve` and the image). |
 | `Dockerfile`, `docker-compose.yml` | Build stage runs build and check; the runtime image serves `dist/web` plus the model API with `tools/server.py`. |
