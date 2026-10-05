@@ -9,7 +9,7 @@ third-party tool logos, works offline.
 | Tab | What it does |
 | --- | --- |
 | **Lifecycle** | The loop. Focus auto-cycles through the stages, hover overrides it, click opens a detail panel. Layer toggles: core capabilities, coverage, tooling. Coverage also enables the readiness timeline slider. Below 900px viewport width the loop is hidden and only the stage cards are shown. |
-| **Roadmap** | One horizontal section per stage: readiness per quarter, highlights per quarter (edited in place, on a tinted band), and a timeline row per tool with free-text notes. |
+| **Roadmap** | Switch between an SDLC roadmap grouped by stage and a Tools roadmap grouped by tool. Both show quarterly capability coverage and editable free-text notes; the SDLC view also shows stage readiness and highlights. |
 | **Editor** | Edit the model: timeline range, stages and capabilities, tools table (with a note per tool→capability assignment), Save/Load JSON. |
 
 Readiness is derived from the model, never stored: a capability takes the best status

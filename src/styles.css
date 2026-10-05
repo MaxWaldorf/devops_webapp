@@ -2315,6 +2315,12 @@ select.input option { background: var(--color-surface); color: var(--color-text)
 .c-padding-4px-6px_max-width-260px { padding:4px 6px; max-width:260px; }
 .c-padding-5px-6px { padding:5px 6px; }
 .c-max-width-720px { max-width:720px; }
+.c-roadmap-switch { align-self:flex-start; padding:3px; gap:3px; border:1px solid var(--color-divider); border-radius:8px; background:var(--color-neutral-900); }
+.c-roadmap-switch-btn { min-height:32px; padding:6px 11px; border-radius:6px; }
+.c-roadmap-empty { padding:14px; border:1px dashed var(--color-divider); border-radius:8px; color:var(--color-neutral-300); font-size:13px; }
+.c-roadmap-quarter-head { padding-bottom:7px; border-bottom:1px solid var(--color-divider); color:var(--color-neutral-300); font-size:11px; }
+.c-cap-stage { display:block; margin-top:3px; color:var(--color-neutral-300); font-size:10px; font-weight:400; }
+.c-roadmap-notes-label { align-self:start; padding-top:7px; font:400 9.5px/1 var(--font-body); letter-spacing:.13em; }
 .c-padding-16px-18px_border-radius-10px_box-shadow-shadow-sm { padding:16px 18px; border-radius:10px; box-shadow:var(--shadow-sm); }
 .c-width-30px_height-30px_font-size-17px { width:30px; height:30px; font-size:17px; background:var(--color-neutral-900); }
 .c-font-500-20px-1-font-h { font:500 20px/1 var(--font-heading); }
