@@ -1101,7 +1101,7 @@ class Component extends DCLogic {
       + "<p class=\"xp-cover-sub\">" + esc(s.subtitle) + "</p></div>";
   }
   async pdfLoopCanvas(s) {
-    await document.fonts.load("22px Phosphor");
+    await Promise.all(["9px Inter", "11px Inter", "700 15px Inter", "22px Phosphor", "14px Phosphor"].map(f => document.fonts.load(f)));
     const bg = this.pptxBg(), text = this.resolveColor("var(--color-text)"), surface = this.resolveColor("var(--color-surface)");
     const svg = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"1600\" height=\"900\" viewBox=\"0 0 1600 900\">"
       + "<rect width=\"1600\" height=\"900\" fill=\"#" + bg + "\"/>"
@@ -1119,24 +1119,53 @@ class Component extends DCLogic {
         const ctx = canvas.getContext("2d");
         ctx.drawImage(image, 0, 0);
         s.stages.forEach(st2 => {
-          const x = Math.max(155, Math.min(1445, st2.lxp * 16)), y = Math.max(108, Math.min(792, 150 + st2.lyp * 6));
-          ctx.fillStyle = "#" + surface; ctx.strokeStyle = "#" + this.resolveColor("var(--color-divider)", "3F424D");
-          ctx.lineWidth = 1; ctx.beginPath(); ctx.roundRect(x - 150, y - 95, 300, 190, 10); ctx.fill(); ctx.stroke();
-          ctx.font = "700 15px Inter"; ctx.fillStyle = "#" + text; ctx.fillText(st2.name, x - 134, y - 72);
-          st2.caps.forEach((c, index) => {
-            const rowY = y - 47 + index * 38;
-            ctx.font = "14px Phosphor"; ctx.fillStyle = "#" + this.resolveColor("var(--color-accent-400)"); ctx.fillText(this.iconGlyph(c.icon), x - 134, rowY);
-            ctx.font = "11px Inter"; ctx.fillStyle = "#" + text; ctx.fillText(c.label, x - 112, rowY);
-            let chipX = x - 112;
-            c.tools.forEach(tool => {
-              ctx.font = "9px Inter";
-              const chipW = ctx.measureText(tool.name).width + 18;
-              ctx.fillStyle = "#" + this.resolveColor("var(--color-accent-900)"); ctx.strokeStyle = "#" + this.resolveColor("var(--color-accent-700)");
-              ctx.beginPath(); ctx.roundRect(chipX, rowY + 5, chipW, 16, 4); ctx.fill(); ctx.stroke();
-              ctx.fillStyle = "#" + this.resolveColor("var(--color-accent-200)"); ctx.fillText(tool.name, chipX + 9, rowY + 16);
-              chipX += chipW + 5;
+          const cardPadding = 16, labelX = cardPadding + 22, toolX = labelX, chipGap = 7;
+          const contentWidth = Math.max(...st2.caps.map(c => {
+            ctx.font = "11px Inter";
+            const labelWidth = ctx.measureText(c.label).width + labelX + cardPadding;
+            ctx.font = "9px Inter";
+            const widestChipWidth = Math.max(0, ...c.tools.map(tool => ctx.measureText(tool.name).width + 20)) + toolX + cardPadding;
+            return Math.max(labelWidth, widestChipWidth);
+          }));
+          const cardWidth = Math.max(190, Math.min(320, Math.ceil(contentWidth)));
+          const rows = st2.caps.map(c => {
+            ctx.font = "9px Inter";
+            const tools = c.tools.length ? c.tools : ["No tooling"];
+            let cursorX = toolX, lines = 1;
+            const chips = tools.map(tool => {
+              const width = ctx.measureText(tool.name).width + (c.tools.length ? 20 : 0);
+              if (cursorX + width > cardWidth - cardPadding && cursorX > toolX) {
+                cursorX = toolX;
+                lines += 1;
+              }
+              const chip = { name: tool.name, x: cursorX, line: lines, width };
+              cursorX += width + chipGap;
+              return chip;
             });
-            if (!c.tools.length) { ctx.font = "9px Inter"; ctx.fillStyle = "#" + this.resolveColor("var(--color-neutral-300)"); ctx.fillText("No tooling", chipX, rowY + 16); }
+            return { capability: c, chips, height: 16 + lines * 22 };
+          });
+          const cardHeight = 48 + rows.reduce((height, row) => height + row.height, 0) + cardPadding;
+          const x = Math.max(cardWidth / 2, Math.min(1600 - cardWidth / 2, st2.lxp * 16));
+          const y = Math.max(cardHeight / 2, Math.min(900 - cardHeight / 2 - 40, 150 + st2.lyp * 6));
+          ctx.fillStyle = "#" + surface; ctx.strokeStyle = "#" + this.resolveColor("var(--color-divider)", "3F424D");
+          ctx.lineWidth = 1; ctx.beginPath(); ctx.roundRect(x - cardWidth / 2, y - cardHeight / 2, cardWidth, cardHeight, 10); ctx.fill(); ctx.stroke();
+          ctx.font = "700 15px Inter"; ctx.fillStyle = "#" + text; ctx.fillText(st2.name, x - cardWidth / 2 + cardPadding, y - cardHeight / 2 + 24);
+          let rowY = y - cardHeight / 2 + 48;
+          rows.forEach(row => {
+            const c = row.capability;
+            ctx.font = "14px Phosphor"; ctx.fillStyle = "#" + this.resolveColor("var(--color-accent-400)"); ctx.fillText(this.iconGlyph(c.icon), x - cardWidth / 2 + cardPadding, rowY);
+            ctx.font = "11px Inter"; ctx.fillStyle = "#" + text; ctx.fillText(c.label, x - cardWidth / 2 + labelX, rowY);
+            row.chips.forEach(chip => {
+              const chipY = rowY + 5 + (chip.line - 1) * 22;
+              if (c.tools.length) {
+                ctx.fillStyle = "#" + this.resolveColor("var(--color-accent-900)"); ctx.strokeStyle = "#" + this.resolveColor("var(--color-accent-700)");
+                ctx.beginPath(); ctx.roundRect(x - cardWidth / 2 + chip.x, chipY, chip.width, 19, 5); ctx.fill(); ctx.stroke();
+                ctx.fillStyle = "#" + this.resolveColor("var(--color-accent-200)"); ctx.fillText(chip.name, x - cardWidth / 2 + chip.x + 9, chipY + 13);
+              } else {
+                ctx.fillStyle = "#" + this.resolveColor("var(--color-neutral-300)"); ctx.fillText(chip.name, x - cardWidth / 2 + chip.x, chipY + 13);
+              }
+            });
+            rowY += row.height;
           });
         });
         resolve(canvas);
