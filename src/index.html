@@ -401,9 +401,16 @@
   <div class="u-flex u-col c-padding-8px-clamp-16px_gap-26px">
     <div class="c-max-width-720px">
       <h1 class="c-font-size-36px_margin-0-0-8px">Roadmap overview</h1>
-      <p class="c-margin-0_font-size-14-5px_color-neutral-20">{{rangeLabel}}. Each stage carries its readiness line, its highlights per quarter (click a quarter to edit), and — under every capability — one line per tool where you can note what happens that quarter.</p>
+      <p class="c-margin-0_font-size-14-5px_color-neutral-20">{{rangeLabel}}. Switch between the SDLC view and a tool-focused view of the same roadmap data.</p>
     </div>
 
+    <div class="u-flex c-roadmap-switch" role="tablist" aria-label="Roadmap view">
+      <sc-for list="{{roadmapModes}}" as="rm" hint-placeholder-count="2">
+        <button type="button" role="tab" aria-selected="{{rm.selected}}" class="btn c-roadmap-switch-btn" style="background:{{rm.bg}};border-color:{{rm.bd}};color:{{rm.fg}}" sc-camel-on-click="{{rm.onClick}}"><i class="ph {{rm.icon}}"></i>{{rm.label}}</button>
+      </sc-for>
+    </div>
+
+    <sc-if value="{{isSdlcRoadmap}}">
     <sc-for list="{{rmStages}}" as="rs" hint-placeholder-count="8">
       <section class="u-flex u-col u-gap-12px u-background-surface c-padding-16px-18px_border-radius-10px_box-shadow-shadow-sm">
         <div class="u-flex u-items-center u-gap-10px">
@@ -503,6 +510,82 @@
         </div>
       </section>
     </sc-for>
+    </sc-if>
+
+    <sc-if value="{{isToolsRoadmap}}">
+    <sc-for list="{{rmTools}}" as="rt" hint-placeholder-count="6">
+      <section class="u-flex u-col u-gap-12px u-background-surface c-padding-16px-18px_border-radius-10px_box-shadow-shadow-sm">
+        <div class="u-flex u-items-center u-gap-10px">
+          <span class="u-border-radius-8px u-grid u-place-center u-color-accent-300 c-width-30px_height-30px_font-size-17px"><i class="ph ph-wrench"></i></span>
+          <span class="c-font-500-20px-1-font-h">{{rt.name}}</span>
+          <span class="u-font-size-12px c-color-neutral-20">{{rt.summary}}</span>
+        </div>
+
+        <sc-if value="{{rt.noCaps}}">
+          <div class="c-roadmap-empty">No core capabilities assigned. Add an assignment in the Editor tab.</div>
+        </sc-if>
+
+        <sc-if value="{{rt.hasCaps}}">
+        <div class="c-overflow-x-auto_padding-bottom-4px">
+        <div class="u-flex u-col u-gap-12px c-min-width-max-content">
+          <div class="u-grid u-gap-8px u-items-center c-roadmap-quarter-head" style="grid-template-columns:{{cols}}">
+            <span class="u-upper u-color-accent-300 c-font-400-9-5px-1-font_letter-spacing-13em">Core capabilities</span>
+            <sc-for list="{{quarterHeaders}}" as="qh" hint-placeholder-count="5">
+              <span>{{qh.label}}</span>
+            </sc-for>
+          </div>
+          <sc-for list="{{rt.caps}}" as="rc" hint-placeholder-count="4">
+            <div class="u-flex u-col u-gap-7px c-padding-top-11px_border-top-1px-solid-c">
+              <div class="u-grid u-gap-8px u-items-center" style="grid-template-columns:{{cols}}">
+                <span class="u-flex u-items-center u-gap-7px c-font-size-13px"><i class="ph {{rc.icon}} u-font-size-15px u-color-accent-400"></i><span>{{rc.label}}<small class="c-cap-stage">{{rc.stage}}</small></span></span>
+                <sc-for list="{{rc.statusCells}}" as="cc" hint-placeholder-count="5">
+                  <span class="u-flex u-items-center u-gap-6px c-font-size-10-5px" style="color:{{cc.fg}}"><span class="u-no-shrink u-round c-width-9px_height-9px" style="background:{{cc.dotBg}};border:1px solid {{cc.dotBd}}"></span>{{cc.label}}</span>
+                </sc-for>
+              </div>
+              <div class="u-grid u-gap-8px c-align-items-stretch" style="grid-template-columns:{{cols}}">
+                <span class="u-upper u-color-accent-300 c-roadmap-notes-label">Roadmap notes</span>
+                <sc-for list="{{rc.cells}}" as="tc" hint-placeholder-count="5">
+                  <div class="u-flex u-col c-gap-4px">
+                    <span class="u-height-4px u-border-radius-2px" style="background:{{tc.bar}}"></span>
+                    <sc-if value="{{tc.editing}}">
+                      <textarea class="input u-font-size-11-5px u-line-height-1-35 c-padding-5px-7px_resize-vertical_font-family-font-body" rows="2" placeholder="One bullet per line" value="{{tc.note}}" sc-camel-on-change="{{tc.setNote}}" sc-camel-on-input="{{tc.setNote}}" sc-camel-on-blur="{{tc.stop}}"></textarea>
+                    </sc-if>
+                    <sc-if value="{{tc.idle}}">
+                      <sc-if value="{{tc.emptyNote}}">
+                        <button aria-label="Add note" title="Add note" type="button" class="btn c-note-add" sc-camel-on-click="{{tc.edit}}"><i class="ph ph-plus"></i></button>
+                      </sc-if>
+                      <sc-if value="{{tc.hasNote}}">
+                        <div class="u-flex u-col c-gap-3px c-note-box" style="border:1px dashed {{tc.noteBd}}">
+                          <sc-for list="{{tc.lines}}" as="nl" hint-placeholder-count="1">
+                            <div class="u-flex u-align-items-flex-start u-gap-6px">
+                              <button type="button" class="btn c-note-line" title="Edit note" sc-camel-on-click="{{nl.edit}}"><span class="u-height-4px u-round u-no-shrink c-width-4px_background-accen_margin-top-5px"></span><span class="c-flex-1">{{nl.text}}</span></button>
+                              <sc-if value="{{nl.canCopy}}">
+                                <button aria-label="Copy line to other capabilities" type="button" class="btn btn-icon c-width-18px_height-18px_font-size-10px" title="Copy line to…" sc-camel-on-click="{{nl.toggleMenu}}"><i class="ph ph-copy"></i></button>
+                              </sc-if>
+                              <sc-if value="{{nl.menuOpen}}">
+                                <div class="u-flex u-col c-gap-3px c-copy-menu">
+                                  <sc-for list="{{nl.targets}}" as="tg" hint-placeholder-count="1">
+                                    <button type="button" class="btn c-copy-item" sc-camel-on-click="{{tg.copy}}">Copy to {{tg.label}}</button>
+                                  </sc-for>
+                                  <button type="button" class="btn c-copy-item" sc-camel-on-click="{{nl.copyAll}}">Copy to all</button>
+                                </div>
+                              </sc-if>
+                            </div>
+                          </sc-for>
+                        </div>
+                      </sc-if>
+                    </sc-if>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+        </div>
+        </sc-if>
+      </section>
+    </sc-for>
+    </sc-if>
   </div>
   </sc-if>
 </div>
@@ -714,7 +797,7 @@ function loadModel() {
 }
 
 class Component extends DCLogic {
-  state = { allIcons: Array.isArray(window.PHOSPHOR_ICONS) ? window.PHOSPHOR_ICONS : null, iconBuf: {}, iconOpen: null, drag: null, dragOver: null, dropAt: null, tab: "loop", menuOpen: false, narrow: false, cursor: 0, hover: null, selected: null, tPos: 0, caps: true, coverage: true, tools: false, model: loadModel() };
+  state = { allIcons: Array.isArray(window.PHOSPHOR_ICONS) ? window.PHOSPHOR_ICONS : null, iconBuf: {}, iconOpen: null, drag: null, dragOver: null, dropAt: null, tab: "loop", roadmapView: "sdlc", menuOpen: false, narrow: false, cursor: 0, hover: null, selected: null, tPos: 0, caps: true, coverage: true, tools: false, model: loadModel() };
 
   flash(msg, bad) {
     this.setState({ ioMsg: msg, ioBad: !!bad });
@@ -993,6 +1076,16 @@ class Component extends DCLogic {
         onClick: () => this.setState({ tab: id, selected: null, hover: null, menuOpen: false })
       };
     };
+    const roadmapMode = (id, label, icon) => {
+      const on = st.roadmapView === id;
+      return {
+        label, icon, selected: on ? "true" : "false",
+        bg: on ? "var(--color-accent-900)" : "transparent",
+        bd: on ? "var(--color-accent-600)" : "var(--color-divider)",
+        fg: on ? "var(--color-accent-100)" : "var(--color-neutral-200)",
+        onClick: () => this.setState({ roadmapView: id, noteEdit: null, copyMenu: null })
+      };
+    };
 
     // ---- editor ----
     const iconSet = st.allIcons && st.allIcons.length ? st.allIcons : ICONS;
@@ -1252,13 +1345,79 @@ class Component extends DCLogic {
       };
     });
 
+    const rmTools = st.tab !== "roadmap" || st.roadmapView !== "tools" ? [] : m.tools.map((t, ti) => {
+      const caps = (t.caps || []).map((a, ki) => {
+        let cap = null, stage = "";
+        for (const s of m.stages) {
+          const found = s.caps.find(c => c.id === a.id);
+          if (found) { cap = found; stage = s.name; break; }
+        }
+        if (!cap) return null;
+        const others = t.caps.map((x, k) => ({ x, k })).filter(o => o.k !== ki);
+        return {
+          icon: cap.icon, label: cap.label || "untitled", stage,
+          statusCells: QUARTERS.map((q, i) => {
+            const sv = STATUS[this.effective(a, i, range)];
+            return { label: sv.label, fg: sv.fg, dotBg: sv.bg, dotBd: sv.bd };
+          }),
+          cells: QUARTERS.map((q, i) => {
+            const key = t.id + ":" + a.id + ":" + i;
+            const qk = qKey(range, i);
+            const note = ((a.notes || {})[qk] || "");
+            const lineList = note.split("\n").map(l => l.trim()).filter(Boolean);
+            const copyTo = (targets, text) => this.edit(mm => {
+              targets.forEach(k => {
+                const dst = mm.tools[ti].caps[k];
+                const notes = dst.notes || (dst.notes = {});
+                const have = String(notes[qk] || "").split("\n").map(l => l.trim()).filter(Boolean);
+                if (have.indexOf(text) < 0) notes[qk] = have.concat([text]).join("\n");
+              });
+              this.setState({ copyMenu: null });
+            });
+            return {
+              bar: toolBar(this.effective(a, i, range)), note,
+              lines: lineList.map((text, li) => {
+                const mk = key + ":" + li;
+                return {
+                  text, canCopy: others.length > 0, menuOpen: st.copyMenu === mk,
+                  toggleMenu: () => this.setState(s2 => ({ copyMenu: s2.copyMenu === mk ? null : mk })),
+                  targets: others.map(o => ({ label: (capMeta(o.x.id) || {}).label || "removed", copy: () => copyTo([o.k], text) })),
+                  copyAll: () => copyTo(others.map(o => o.k), text),
+                  edit: () => this.setState({ noteEdit: key, copyMenu: null })
+                };
+              }),
+              emptyNote: lineList.length === 0, hasNote: lineList.length > 0,
+              noteBd: "var(--color-accent-700)",
+              editing: st.noteEdit === key, idle: st.noteEdit !== key,
+              edit: () => this.setState({ noteEdit: key }),
+              stop: () => this.setState({ noteEdit: null }),
+              setNote: e => {
+                const v = e.target.value;
+                this.edit(mm => { (mm.tools[ti].caps[ki].notes || (mm.tools[ti].caps[ki].notes = {}))[qk] = v; });
+              }
+            };
+          })
+        };
+      }).filter(Boolean);
+      const covered = (t.caps || []).filter(a => this.effective(a, QUARTERS.length - 1, range) === "c").length;
+      return {
+        name: t.name || "untitled",
+        summary: caps.length + " core capabilities · " + covered + " covered by " + QUARTERS[QUARTERS.length - 1],
+        caps, hasCaps: caps.length > 0, noCaps: caps.length === 0
+      };
+    });
+
     const capCount = m.stages.reduce((a, s) => a + s.caps.length, 0);
     const frac = st.tPos / (QUARTERS.length - 1);
 
     return {
       isLoop: st.tab === "loop", isEditor: st.tab === "editor", isRoadmap: st.tab === "roadmap",
       tabs: [tab("loop", "Lifecycle", "ph-infinity"), tab("roadmap", "Roadmap", "ph-flag-banner"), tab("editor", "Editor", "ph-table", "neutral")],
-      rmStages, cols: "190px repeat(" + QUARTERS.length + ", minmax(120px,1fr))",
+      isSdlcRoadmap: st.roadmapView === "sdlc",
+      isToolsRoadmap: st.roadmapView === "tools",
+      roadmapModes: [roadmapMode("sdlc", "SDLC roadmap", "ph-path"), roadmapMode("tools", "Tools roadmap", "ph-wrench")],
+      rmStages, rmTools, quarterHeaders: QUARTERS.map(label => ({ label })),
+      cols: "190px repeat(" + QUARTERS.length + ", minmax(120px,1fr))",
 
       fullD, segments, stages,
       devX: CX - A * 0.52, opsX: CX + A * 0.52,
