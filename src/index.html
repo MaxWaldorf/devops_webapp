@@ -8,6 +8,9 @@
 <script src="vendor/react-dom.production.min.js"></script>
 <script src="vendor/dc-support.js"></script>
 <script src="vendor/phosphor-icons.js"></script>
+<script src="vendor/jszip.min.js"></script>
+<script src="vendor/pptxgen.min.js"></script>
+<script src="vendor/jspdf.umd.min.js"></script>
 <link rel="stylesheet" href="styles.css">
 
 </head>
@@ -32,8 +35,15 @@
         <sc-for list="{{tabs}}" as="tb" hint-placeholder-count="2">
           <button type="button" class="btn u-gap-7px" style="background:{{tb.bg}};border:1px solid {{tb.bd}};color:{{tb.fg}}" sc-camel-on-click="{{tb.onClick}}"><i class="ph {{tb.icon}}"></i>{{tb.label}}</button>
         </sc-for>
+        <button type="button" class="btn btn-secondary u-border-1px-solid-color-divider u-gap-7px" sc-camel-on-click="{{exportPdf}}"><i class="ph ph-file-pdf"></i>Export PDF</button>
+        <button type="button" class="btn btn-secondary u-border-1px-solid-color-divider u-gap-7px" sc-camel-on-click="{{exportPptx}}"><i class="ph ph-microsoft-powerpoint-logo"></i>Export PPTX</button>
       </div>
     </sc-if>
+  </div>
+
+  <div class="c-export-actions">
+    <button type="button" class="btn btn-secondary u-border-1px-solid-color-divider u-gap-7px" sc-camel-on-click="{{exportPdf}}"><i class="ph ph-file-pdf"></i>Export PDF</button>
+    <button type="button" class="btn btn-secondary u-border-1px-solid-color-divider u-gap-7px" sc-camel-on-click="{{exportPptx}}"><i class="ph ph-microsoft-powerpoint-logo"></i>Export PPTX</button>
   </div>
 
   <sc-if value="{{isLoop}}" hint-placeholder-val="{{true}}">
@@ -667,6 +677,11 @@ function qName(r, i) {
   return "Q" + q + " " + y;
 }
 
+// model content is user-editable (incl. via JSON import), so escape before innerHTML
+function esc(s) {
+  return String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" }[c]));
+}
+
 const STATUS = {
   c: { label: "Covered", rank: 3, bg: "var(--color-accent-300)", bd: "var(--color-accent-300)", fg: "var(--color-accent-200)", cell: "var(--color-accent-400)", w: 1 },
   p: { label: "Partially", rank: 2, bg: "linear-gradient(90deg, var(--color-accent-300) 0 50%, transparent 50% 100%)", bd: "var(--color-accent-500)", fg: "var(--color-accent-300)", cell: "var(--color-accent-700)", w: 0.5 },
@@ -935,8 +950,602 @@ class Component extends DCLogic {
     return "n";
   }
 
-  renderVals() {
-    const st = this.state, m = st.model;
+  // ---- export: paginated PDF (print) and native PPTX, both from one fixed-overview deck ----
+  cssVar(name) {
+    if (!this._cssVars) this._cssVars = getComputedStyle(document.documentElement);
+    return this._cssVars.getPropertyValue(name).trim();
+  }
+  // resolve a template color (var()/gradient/hex) to a plain "RRGGBB" hex for pptxgenjs
+  resolveColor(v, fallback) {
+    const fb = fallback || "9184D9";
+    v = String(v || "").trim();
+    let mm = /^var\((--[\w-]+)\)$/.exec(v);
+    if (mm) return this.resolveColor(this.cssVar(mm[1]), fb);
+    if (/^(repeating-)?linear-gradient/.test(v)) {
+      mm = v.match(/#[0-9a-fA-F]{3,8}|var\(--[\w-]+\)/);
+      return mm ? this.resolveColor(mm[0], fb) : fb;
+    }
+    if (/^#[0-9a-fA-F]{3,8}$/.test(v)) return v.slice(1).toUpperCase();
+    return fb;
+  }
+  // a fixed full-overview snapshot (every layer on, no selection, roadmap's end quarter)
+  // computed without touching real UI state, so export never flickers the live app
+  exportData() {
+    const st = this.state;
+    const exportState = Object.assign({}, st, {
+      tab: "roadmap", roadmapView: "sdlc", caps: true, coverage: true, tools: true,
+      selected: null, hover: null, narrow: false, tPos: this.maxStop()
+    });
+    const sdlc = this.renderVals(exportState);
+    const tools = this.renderVals(Object.assign({}, exportState, { roadmapView: "tools" }));
+    return Object.assign({}, sdlc, { rmTools: tools.rmTools });
+  }
+  toolingRows(stage) {
+    return stage.caps.flatMap(cap => cap.tools.map(tool => {
+      const maxChars = Math.max(0, ...tool.cells.map(cell => String(cell.note || "").length));
+      const noteFont = maxChars > 280 ? 8 : maxChars > 120 ? 9 : 11;
+      const charsPerLine = noteFont === 8 ? 46 : noteFont === 9 ? 40 : 32;
+      const lineCount = Math.max(1, Math.ceil(maxChars / charsPerLine));
+      return { cap, tool, noteFont, noteLineHeight: noteFont + 2, rowH: Math.max(72, 42 + lineCount * (noteFont + 2)) };
+    }));
+  }
+  toolingPages(rows) {
+    const pages = [], maxHeight = 640;
+    let page = [], height = 0;
+    rows.forEach(row => {
+      if (page.length && height + row.rowH > maxHeight) { pages.push(page); page = []; height = 0; }
+      page.push(row); height += row.rowH;
+    });
+    if (page.length) pages.push(page);
+    return pages;
+  }
+  roadmapPages(stage) {
+    const pages = [], maxHeight = 510;
+    let page = [], height = 0;
+    stage.caps.forEach(cap => {
+      const tools = this.toolingRows({ caps: [cap] });
+      const capHeight = 42 + tools.reduce((total, tool) => total + tool.rowH, 0);
+      if (page.length && height + capHeight > maxHeight) { pages.push(page); page = []; height = 0; }
+      page.push({ cap, tools, height: capHeight }); height += capHeight;
+    });
+    if (page.length) pages.push(page);
+    return pages;
+  }
+  toolRoadmapPages(tool) {
+    const pages = [], maxRows = 6;
+    for (let start = 0; start < tool.caps.length; start += maxRows) pages.push(tool.caps.slice(start, start + maxRows));
+    return pages;
+  }
+  buildSlides(compactRoadmaps) {
+    const d = this.exportData();
+    const slides = [{ kind: "cover", rangeLabel: d.rangeLabel }];
+    slides.push({ kind: "loop", stages: d.stages, segments: d.segments, fullD: d.fullD, devX: d.devX, opsX: d.opsX, legend: d.legend });
+    slides.push({ kind: "divider", title: "SDLC Roadmap", subtitle: d.rangeLabel });
+    d.rmStages.forEach((rs, i) => {
+      const pages = this.roadmapPages(rs);
+      if (compactRoadmaps) {
+        slides.push({ kind: "roadmap", stage: rs, quarters: d.quarterHeaders, index: i, caps: pages.flat(), page: 1, pages: 1, compact: true });
+      } else {
+        pages.forEach((caps, page) => slides.push({ kind: "roadmap", stage: rs, quarters: d.quarterHeaders, index: i, caps, page: page + 1, pages: pages.length }));
+      }
+    });
+    slides.push({ kind: "divider", title: "Tools Roadmap", subtitle: d.rangeLabel });
+    d.rmTools.forEach((tool, i) => {
+      const pages = this.toolRoadmapPages(tool);
+      pages.forEach((caps, page) => slides.push({ kind: "tool-roadmap", tool, caps, quarters: d.quarterHeaders, index: i, page: page + 1, pages: pages.length }));
+    });
+    return slides;
+  }
+  getExportRoot() {
+    let el = document.getElementById("export-root");
+    if (!el) { el = document.createElement("div"); el.id = "export-root"; document.body.appendChild(el); }
+    return el;
+  }
+  downloadBlob(blob, fileName) {
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.href = url;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+  exportPdf = async () => {
+    if (!window.jspdf) return this.flash("PDF export isn't available", true);
+    try {
+      const pdf = new window.jspdf.jsPDF({ orientation: "landscape", unit: "in", format: [13.333, 7.5], compress: true });
+      const slides = this.buildSlides(false);
+      for (let i = 0; i < slides.length; i++) {
+        if (i) pdf.addPage([13.333, 7.5], "landscape");
+        await this.addPdfSlide(pdf, slides[i]);
+      }
+      this.downloadBlob(pdf.output("blob"), "devops-lifecycle.pdf");
+    } catch (e) {
+      this.flash("Could not generate the PDF file", true);
+    }
+  };
+  exportPptx = async () => {
+    if (!window.PptxGenJS) return this.flash("PowerPoint export isn't available", true);
+    try {
+      const pptx = new window.PptxGenJS();
+      pptx.defineLayout({ name: "XWIDE", width: 13.333, height: 7.5 });
+      pptx.layout = "XWIDE";
+      for (const s of this.buildSlides(true)) await this.addPptxSlide(pptx, s);
+      this.downloadBlob(await pptx.write({ outputType: "blob" }), "devops-lifecycle.pptx");
+    } catch (e) {
+      this.flash("Could not generate the PowerPoint file", true);
+    }
+  };
+
+  // ---- PDF slide markup (plain strings: these never go through the sc- template) ----
+  slideHtml(s) {
+    const bg = this.cssVar("--color-bg") || "#161826", text = this.cssVar("--color-text") || "#e9e9ed";
+    const body = s.kind === "cover" ? this.coverHtml(s)
+      : s.kind === "divider" ? this.dividerHtml(s)
+      : s.kind === "loop" ? this.loopHtml(s)
+      : s.kind === "stage" ? this.stageHtml(s)
+      : this.roadmapHtml(s);
+    return "<section class=\"xp-slide\" style=\"background:" + bg + ";color:" + text + "\">" + body + "</section>";
+  }
+  coverHtml(s) {
+    const date = new Date().toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" });
+    return "<div class=\"xp-cover\"><span class=\"xp-kicker\">Engineering Platform</span>"
+      + "<h1 class=\"xp-cover-title\">Delivery lifecycle &amp; roadmap</h1>"
+      + "<p class=\"xp-cover-sub\">" + esc(s.rangeLabel) + "</p>"
+      + "<p class=\"xp-cover-date\">" + esc(date) + "</p></div>";
+  }
+  dividerHtml(s) {
+    return "<div class=\"xp-cover\"><span class=\"xp-kicker\">Section</span>"
+      + "<h1 class=\"xp-cover-title\">" + esc(s.title) + "</h1>"
+      + "<p class=\"xp-cover-sub\">" + esc(s.subtitle) + "</p></div>";
+  }
+  async pdfLoopCanvas(s) {
+    await document.fonts.load("22px Phosphor");
+    const bg = this.pptxBg(), text = this.resolveColor("var(--color-text)"), surface = this.resolveColor("var(--color-surface)");
+    const svg = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"1600\" height=\"900\" viewBox=\"0 0 1600 900\">"
+      + "<rect width=\"1600\" height=\"900\" fill=\"#" + bg + "\"/>"
+      + "<text x=\"72\" y=\"78\" fill=\"#" + text + "\" font-family=\"Inter, sans-serif\" font-size=\"42\" font-weight=\"600\">The delivery loop</text>"
+      + "<g transform=\"translate(0 150)\"><text x=\"" + s.devX + "\" y=\"318\" text-anchor=\"middle\" fill=\"#75798C\" font-family=\"Inter, sans-serif\" font-size=\"92\" font-weight=\"500\">DEV</text>"
+      + "<text x=\"" + s.opsX + "\" y=\"318\" text-anchor=\"middle\" fill=\"#75798C\" font-family=\"Inter, sans-serif\" font-size=\"92\" font-weight=\"500\">OPS</text>"
+      + "<path d=\"" + s.fullD + "\" fill=\"none\" stroke=\"#FFFFFF\" stroke-width=\"34\" stroke-linecap=\"round\" opacity=\"0.10\"/>"
+      + "<path d=\"" + s.fullD + "\" fill=\"none\" stroke=\"#F5F4FF\" stroke-width=\"18\" stroke-linecap=\"round\" opacity=\"0.45\"/>"
+      + "<path d=\"" + s.fullD + "\" fill=\"none\" stroke=\"#FFFFFF\" stroke-width=\"7\" stroke-linecap=\"round\"/>"
+      + "</g><text x=\"72\" y=\"855\" fill=\"#" + this.resolveColor("var(--color-neutral-300)") + "\" font-family=\"Inter, sans-serif\" font-size=\"18\">Core capabilities and tooling by lifecycle stage</text></svg>";
+    return new Promise((resolve, reject) => {
+      const image = new Image(), canvas = document.createElement("canvas");
+      canvas.width = 1600; canvas.height = 900;
+      image.onload = () => {
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(image, 0, 0);
+        s.stages.forEach(st2 => {
+          const x = Math.max(155, Math.min(1445, st2.lxp * 16)), y = Math.max(108, Math.min(792, 150 + st2.lyp * 6));
+          ctx.fillStyle = "#" + surface; ctx.strokeStyle = "#" + this.resolveColor("var(--color-divider)", "3F424D");
+          ctx.lineWidth = 1; ctx.beginPath(); ctx.roundRect(x - 150, y - 95, 300, 190, 10); ctx.fill(); ctx.stroke();
+          ctx.font = "700 15px Inter"; ctx.fillStyle = "#" + text; ctx.fillText(st2.name, x - 134, y - 72);
+          st2.caps.forEach((c, index) => {
+            const rowY = y - 47 + index * 38;
+            ctx.font = "14px Phosphor"; ctx.fillStyle = "#" + this.resolveColor("var(--color-accent-400)"); ctx.fillText(this.iconGlyph(c.icon), x - 134, rowY);
+            ctx.font = "11px Inter"; ctx.fillStyle = "#" + text; ctx.fillText(c.label, x - 112, rowY);
+            let chipX = x - 112;
+            c.tools.forEach(tool => {
+              ctx.font = "9px Inter";
+              const chipW = ctx.measureText(tool.name).width + 18;
+              ctx.fillStyle = "#" + this.resolveColor("var(--color-accent-900)"); ctx.strokeStyle = "#" + this.resolveColor("var(--color-accent-700)");
+              ctx.beginPath(); ctx.roundRect(chipX, rowY + 5, chipW, 16, 4); ctx.fill(); ctx.stroke();
+              ctx.fillStyle = "#" + this.resolveColor("var(--color-accent-200)"); ctx.fillText(tool.name, chipX + 9, rowY + 16);
+              chipX += chipW + 5;
+            });
+            if (!c.tools.length) { ctx.font = "9px Inter"; ctx.fillStyle = "#" + this.resolveColor("var(--color-neutral-300)"); ctx.fillText("No tooling", chipX, rowY + 16); }
+          });
+        });
+        resolve(canvas);
+      };
+      image.onerror = reject;
+      image.src = "data:image/svg+xml;base64," + btoa(unescape(encodeURIComponent(svg)));
+    });
+  }
+  iconGlyph(icon) {
+    const el = document.createElement("i");
+    el.className = "ph " + icon;
+    document.body.appendChild(el);
+    const content = getComputedStyle(el, "::before").content;
+    el.remove();
+    return content && content !== "none" ? content.replace(/^['"]|['"]$/g, "") : "•";
+  }
+  drawCoverageDot(ctx, x, y, cell, radius) {
+    const covered = "#" + this.resolveColor("var(--color-accent-300)");
+    const partial = "#" + this.resolveColor("var(--color-accent-500)");
+    const muted = "#" + this.resolveColor("var(--color-divider)", "6A6E80");
+    const status = cell.label;
+    ctx.save();
+    ctx.lineWidth = 1;
+    if (status === "Covered") {
+      ctx.fillStyle = covered; ctx.beginPath(); ctx.arc(x, y, radius, 0, Math.PI * 2); ctx.fill();
+    } else if (status === "Partially") {
+      ctx.fillStyle = covered; ctx.beginPath(); ctx.arc(x, y, radius, Math.PI / 2, Math.PI * 1.5); ctx.closePath(); ctx.fill();
+      ctx.strokeStyle = partial; ctx.beginPath(); ctx.arc(x, y, radius, 0, Math.PI * 2); ctx.stroke();
+    } else if (status === "Not covered") {
+      ctx.strokeStyle = muted; ctx.beginPath(); ctx.arc(x, y, radius, 0, Math.PI * 2); ctx.stroke();
+    } else {
+      ctx.fillStyle = "#" + this.resolveColor("var(--color-neutral-700)"); ctx.beginPath(); ctx.arc(x, y, radius, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.restore();
+  }
+  roadmapCanvas(s) {
+    const canvas = document.createElement("canvas"), ctx = canvas.getContext("2d"), rs = s.stage, quarters = s.quarters;
+    canvas.width = 1600; canvas.height = 900;
+    const color = v => "#" + this.resolveColor(v, "E9E9ED");
+    const wrap = (text, width, maxLines) => {
+      const words = String(text || "").split(/\s+/), lines = [], current = [];
+      words.forEach(word => {
+        const next = current.concat([word]).join(" ");
+        if (current.length && ctx.measureText(next).width > width) { lines.push(current.join(" ")); current.length = 0; }
+        current.push(word);
+      });
+      if (current.length) lines.push(current.join(" "));
+      if (maxLines && lines.length > maxLines) { lines.length = maxLines; }
+      return lines;
+    };
+    ctx.fillStyle = color("var(--color-bg)"); ctx.fillRect(0, 0, 1600, 900);
+    ctx.font = "600 42px Inter"; ctx.fillStyle = color("var(--color-text)"); ctx.fillText(rs.name, 70, 72);
+    ctx.font = "18px Inter"; ctx.fillStyle = color("var(--color-neutral-300)"); ctx.fillText(rs.summary, 70, 104);
+    const labelX = 350, gridW = 1170, cellW = gridW / quarters.length, top = 155;
+    ctx.font = "600 14px Inter"; ctx.fillStyle = color("var(--color-accent-300)"); ctx.fillText("READINESS", 70, top + 20);
+    quarters.forEach((q, i) => { ctx.textAlign = "center"; ctx.fillText(q.label, labelX + cellW * i + cellW / 2, top + 20); });
+    rs.stageCells.forEach((cell, i) => {
+      ctx.font = "15px Inter"; ctx.fillStyle = color(cell.fg); ctx.fillText(cell.pct, labelX + cellW * i + cellW / 2, top + 56);
+      ctx.fillStyle = color(cell.bar); ctx.fillRect(labelX + cellW * i + 10, top + 70, cellW - 20, 8);
+    });
+    ctx.textAlign = "left"; ctx.font = "600 14px Inter"; ctx.fillStyle = color("var(--color-accent-300)"); ctx.fillText("HIGHLIGHTS", 70, top + 120);
+    ctx.font = "12px Inter";
+    let highlightLines = rs.hlCells.map(cell => wrap(cell.lines.map(line => line.text).join(" · "), cellW - 18));
+    let highlightFont = 12, highlightLineHeight = 16;
+    const longestHighlight = Math.max(1, ...highlightLines.map(lines => lines.length));
+    if (longestHighlight * highlightLineHeight > 190) {
+      highlightFont = Math.max(8, Math.floor(190 / longestHighlight) - 2);
+      highlightLineHeight = highlightFont + 3;
+      ctx.font = highlightFont + "px Inter";
+      highlightLines = rs.hlCells.map(cell => wrap(cell.lines.map(line => line.text).join(" · "), cellW - 18));
+    }
+    const highlightHeight = Math.max(1, ...highlightLines.map(lines => lines.length)) * highlightLineHeight;
+    rs.hlCells.forEach((cell, i) => {
+      ctx.font = highlightFont + "px Inter"; ctx.fillStyle = color("var(--color-text)");
+      const lines = highlightLines[i];
+      lines.forEach((line, lineIndex) => ctx.fillText(line, labelX + cellW * i + 9, top + 120 + lineIndex * highlightLineHeight));
+    });
+    let y = Math.max(365, top + 150 + highlightHeight);
+    const capGroups = s.caps || rs.caps.map(cap => ({ cap, tools: this.toolingRows({ caps: [cap] }) }));
+    const contentHeight = capGroups.reduce((total, group) => total + 42 + group.tools.reduce((toolTotal, tool) => toolTotal + tool.rowH, 0), 0);
+    const scale = s.compact ? Math.min(1, (840 - y) / Math.max(1, contentHeight)) : 1;
+    capGroups.forEach(({ cap, tools }) => {
+      ctx.strokeStyle = color("var(--color-divider)"); ctx.beginPath(); ctx.moveTo(70, y - 28); ctx.lineTo(1520, y - 28); ctx.stroke();
+      ctx.font = "23px Phosphor"; ctx.fillStyle = color("var(--color-accent-400)"); ctx.fillText(this.iconGlyph(cap.icon), 72, y);
+      ctx.font = "600 " + Math.max(12, 18 * scale) + "px Inter"; ctx.fillStyle = color("var(--color-text)");
+      wrap(cap.label, 230, 2).forEach((line, lineIndex) => ctx.fillText(line, 108, y - 7 + lineIndex * 20 * scale));
+      cap.cells.forEach((cell, i) => {
+        const cx = labelX + cellW * i + cellW / 2;
+        ctx.font = Math.max(9, 12 * scale) + "px Inter"; ctx.fillStyle = color(cell.fg); ctx.textAlign = "center";
+        const labelWidth = ctx.measureText(cell.label).width;
+        this.drawCoverageDot(ctx, cx - labelWidth / 2 - 7, y - 5, cell, 5);
+        ctx.textAlign = "left"; ctx.fillText(cell.label, cx - labelWidth / 2 + 3, y - 1);
+      });
+      ctx.textAlign = "left";
+      y += 42 * scale;
+      tools.forEach(toolRow => {
+        const toolY = y;
+        ctx.font = "14px Phosphor"; ctx.fillStyle = color("var(--color-neutral-300)"); ctx.fillText(this.iconGlyph("ph-wrench"), 108, toolY);
+        ctx.font = Math.max(10, 13 * scale) + "px Inter"; ctx.fillStyle = color("var(--color-neutral-100)"); ctx.fillText(toolRow.tool.name, 132, toolY);
+        toolRow.tool.cells.forEach((cell, i) => {
+          const x = labelX + cellW * i + 8;
+          ctx.fillStyle = color(cell.bar); ctx.fillRect(x, toolY - 6 * scale, cellW - 16, Math.max(3, 5 * scale));
+          const noteFont = Math.max(7, toolRow.noteFont * scale), noteLineHeight = Math.max(9, toolRow.noteLineHeight * scale);
+          ctx.font = noteFont + "px Inter"; ctx.fillStyle = color("var(--color-text)");
+          wrap(cell.note, cellW - 18).forEach((line, lineIndex) => ctx.fillText(line, x + 1, toolY + 15 * scale + lineIndex * noteLineHeight));
+        });
+        y += toolRow.rowH * scale;
+      });
+    });
+    return canvas;
+  }
+  toolingCanvas(s) {
+    const canvas = document.createElement("canvas"), ctx = canvas.getContext("2d"), rs = s.stage, quarters = s.quarters;
+    canvas.width = 1600; canvas.height = 900;
+    const color = v => "#" + this.resolveColor(v, "E9E9ED");
+    const wrap = (text, width, maxLines) => {
+      const words = String(text || "").split(/\s+/).filter(Boolean), lines = [], current = [];
+      words.forEach(word => {
+        const next = current.concat([word]).join(" ");
+        if (current.length && ctx.measureText(next).width > width) { lines.push(current.join(" ")); current.length = 0; }
+        current.push(word);
+      });
+      if (current.length) lines.push(current.join(" "));
+      return maxLines ? lines.slice(0, maxLines) : lines;
+    };
+    ctx.fillStyle = color("var(--color-bg)"); ctx.fillRect(0, 0, 1600, 900);
+    ctx.font = "600 42px Inter"; ctx.fillStyle = color("var(--color-text)"); ctx.fillText(rs.name + " tooling roadmap", 70, 72);
+    ctx.font = "18px Inter"; ctx.fillStyle = color("var(--color-neutral-300)");
+    ctx.fillText("Tool coverage and roadmap notes by core capability", 70, 104);
+    if (s.pages > 1) ctx.fillText("Page " + s.page + " of " + s.pages, 1380, 104);
+    const labelX = 350, gridW = 1170, cellW = gridW / quarters.length, top = 150;
+    ctx.font = "600 14px Inter"; ctx.fillStyle = color("var(--color-accent-300)"); ctx.fillText("CAPABILITY / TOOL", 70, top + 18);
+    quarters.forEach((q, i) => { ctx.textAlign = "center"; ctx.fillText(q.label, labelX + cellW * i + cellW / 2, top + 18); });
+    ctx.textAlign = "left";
+    let y = top + 58;
+    s.rows.forEach(row => {
+      ctx.strokeStyle = color("var(--color-divider)"); ctx.beginPath(); ctx.moveTo(70, y - 23); ctx.lineTo(1520, y - 23); ctx.stroke();
+      ctx.font = "16px Phosphor"; ctx.fillStyle = color("var(--color-accent-400)"); ctx.fillText(this.iconGlyph(row.cap.icon), 72, y);
+      ctx.font = "600 13px Inter"; ctx.fillStyle = color("var(--color-text)");
+      wrap(row.cap.label, 220, 2).forEach((line, lineIndex) => ctx.fillText(line, 100, y - 6 + lineIndex * 15));
+      ctx.font = "12px Inter"; ctx.fillStyle = color("var(--color-neutral-200)"); ctx.fillText(row.tool.name, 100, y + 28);
+      row.tool.cells.forEach((cell, i) => {
+        const x = labelX + cellW * i + 8;
+        ctx.fillStyle = color(cell.bar); ctx.fillRect(x, y - 4, cellW - 16, 6);
+        ctx.font = row.noteFont + "px Inter"; ctx.fillStyle = color("var(--color-text)");
+        wrap(cell.note, cellW - 18).forEach((line, lineIndex) => ctx.fillText(line, x + 1, y + 19 + lineIndex * row.noteLineHeight));
+      });
+      y += row.rowH;
+    });
+    return canvas;
+  }
+  toolRoadmapCanvas(s) {
+    const canvas = document.createElement("canvas"), ctx = canvas.getContext("2d"), tool = s.tool, quarters = s.quarters;
+    canvas.width = 1600; canvas.height = 900;
+    const color = v => "#" + this.resolveColor(v, "E9E9ED");
+    const wrap = (text, width, maxLines) => {
+      const words = String(text || "").split(/\s+/).filter(Boolean), lines = [], current = [];
+      words.forEach(word => {
+        const next = current.concat([word]).join(" ");
+        if (current.length && ctx.measureText(next).width > width) { lines.push(current.join(" ")); current.length = 0; }
+        current.push(word);
+      });
+      if (current.length) lines.push(current.join(" "));
+      return maxLines ? lines.slice(0, maxLines) : lines;
+    };
+    ctx.fillStyle = color("var(--color-bg)"); ctx.fillRect(0, 0, 1600, 900);
+    ctx.font = "600 42px Inter"; ctx.fillStyle = color("var(--color-text)"); ctx.fillText(tool.name, 70, 72);
+    ctx.font = "18px Inter"; ctx.fillStyle = color("var(--color-neutral-300)"); ctx.fillText(tool.summary, 70, 104);
+    if (s.pages > 1) ctx.fillText("Page " + s.page + " of " + s.pages, 1380, 104);
+    const labelX = 350, gridW = 1170, cellW = gridW / quarters.length, top = 150, rowH = 108;
+    ctx.font = "600 14px Inter"; ctx.fillStyle = color("var(--color-accent-300)"); ctx.fillText("CORE CAPABILITY", 70, top + 18);
+    quarters.forEach((q, i) => { ctx.textAlign = "center"; ctx.fillText(q.label, labelX + cellW * i + cellW / 2, top + 18); });
+    ctx.textAlign = "left";
+    s.caps.forEach((cap, row) => {
+      const y = top + 62 + row * rowH;
+      ctx.strokeStyle = color("var(--color-divider)"); ctx.beginPath(); ctx.moveTo(70, y - 25); ctx.lineTo(1520, y - 25); ctx.stroke();
+      ctx.font = "18px Phosphor"; ctx.fillStyle = color("var(--color-accent-400)"); ctx.fillText(this.iconGlyph(cap.icon), 72, y);
+      ctx.font = "600 15px Inter"; ctx.fillStyle = color("var(--color-text)"); wrap(cap.label, 220, 2).forEach((line, lineIndex) => ctx.fillText(line, 102, y - 6 + lineIndex * 17));
+      ctx.font = "11px Inter";
+      cap.statusCells.forEach((cell, i) => {
+        const cx = labelX + cellW * i + cellW / 2, width = ctx.measureText(cell.label).width;
+        this.drawCoverageDot(ctx, cx - width / 2 - 7, y - 5, cell, 5);
+        ctx.fillStyle = color(cell.fg); ctx.fillText(cell.label, cx - width / 2 + 3, y - 1);
+      });
+      cap.cells.forEach((cell, i) => {
+        const x = labelX + cellW * i + 8;
+        ctx.fillStyle = color(cell.bar); ctx.fillRect(x, y + 25, cellW - 16, 5);
+        ctx.font = "10px Inter"; ctx.fillStyle = color("var(--color-text)");
+        wrap(cell.note, cellW - 18, 3).forEach((line, lineIndex) => ctx.fillText(line, x + 1, y + 43 + lineIndex * 12));
+      });
+    });
+    return canvas;
+  }
+  pdfColor(pdf, color) {
+    const value = this.resolveColor(color, "E9E9ED");
+    pdf.setTextColor("#" + value);
+    return value;
+  }
+  pdfGround(pdf) {
+    pdf.setFillColor("#" + this.pptxBg());
+    pdf.rect(0, 0, 13.333, 7.5, "F");
+  }
+  pdfWrite(pdf, text, x, y, size, color, options) {
+    pdf.setFont("helvetica", options && options.bold ? "bold" : "normal");
+    pdf.setFontSize(size);
+    this.pdfColor(pdf, color || "var(--color-text)");
+    pdf.text(String(text), x, y, options || {});
+  }
+  async addPdfSlide(pdf, s) {
+    this.pdfGround(pdf);
+    if (s.kind === "loop") {
+      const canvas = await this.pdfLoopCanvas(s);
+      pdf.addImage(canvas.toDataURL("image/png"), "PNG", 0, 0, 13.333, 7.5, undefined, "FAST");
+      return;
+    }
+    if (s.kind === "roadmap") {
+      const canvas = this.roadmapCanvas(s);
+      pdf.addImage(canvas.toDataURL("image/png"), "PNG", 0, 0, 13.333, 7.5, undefined, "FAST");
+      return;
+    }
+    if (s.kind === "tooling") {
+      const canvas = this.toolingCanvas(s);
+      pdf.addImage(canvas.toDataURL("image/png"), "PNG", 0, 0, 13.333, 7.5, undefined, "FAST");
+      return;
+    }
+    if (s.kind === "tool-roadmap") {
+      const canvas = this.toolRoadmapCanvas(s);
+      pdf.addImage(canvas.toDataURL("image/png"), "PNG", 0, 0, 13.333, 7.5, undefined, "FAST");
+      return;
+    }
+    if (s.kind === "cover" || s.kind === "divider") {
+      const title = s.kind === "cover" ? "Delivery lifecycle & roadmap" : s.title;
+      const subtitle = s.kind === "cover" ? s.rangeLabel : s.subtitle;
+      this.pdfWrite(pdf, s.kind === "cover" ? "ENGINEERING PLATFORM" : "SECTION", 0.7, 2.75, 12, "var(--color-accent-300)");
+      this.pdfWrite(pdf, title, 0.7, 3.45, 32, "var(--color-text)", { bold: true });
+      this.pdfWrite(pdf, subtitle, 0.7, 3.85, 15, "var(--color-neutral-300)");
+      return;
+    }
+    if (s.kind === "stage") {
+      const st2 = s.stage;
+      this.pdfWrite(pdf, "STAGE 0" + (s.index + 1), 0.7, 0.7, 11, "var(--color-accent-300)");
+      this.pdfWrite(pdf, st2.name, 0.7, 1.08, 25, "var(--color-text)", { bold: true });
+      this.pdfWrite(pdf, st2.readyLabel, 12.6, 0.92, 12, "var(--color-accent-300)", { align: "right" });
+      let y = 1.65;
+      st2.caps.forEach(c => {
+        pdf.setFillColor("#" + this.resolveColor(c.dotBg, "6A6E80"));
+        pdf.circle(0.84, y - 0.05, 0.055, "F");
+        this.pdfWrite(pdf, c.label, 1.03, y, 14, "var(--color-text)", { bold: true });
+        this.pdfWrite(pdf, c.tools.map(t => t.name).join(", ") || "No tool", 1.03, y + 0.23, 10, "var(--color-neutral-300)");
+        this.pdfWrite(pdf, c.statusLabel, 12.6, y, 10, c.statusFg, { align: "right" });
+        y += 0.9;
+      });
+      if (st2.plan.length) {
+        this.pdfWrite(pdf, "HIGHLIGHTS", 0.7, 5.55, 10, "var(--color-accent-300)");
+        st2.plan.forEach((p, i) => this.pdfWrite(pdf, "•  " + p.text, 0.7, 5.9 + i * 0.28, 10, "var(--color-text)"));
+      }
+      return;
+    }
+    const rs = s.stage, quarters = s.quarters;
+    this.pdfWrite(pdf, rs.name, 0.7, 0.6, 24, "var(--color-text)", { bold: true });
+    this.pdfWrite(pdf, rs.summary, 0.7, 0.9, 10, "var(--color-neutral-300)");
+    const x = 2.8, cellW = 9.8 / quarters.length, top = 1.35;
+    this.pdfWrite(pdf, "READINESS", 0.7, top + 0.18, 9, "var(--color-accent-300)");
+    quarters.forEach((q, i) => this.pdfWrite(pdf, q.label, x + cellW * i + cellW / 2, top + 0.18, 9, "var(--color-accent-300)", { align: "center" }));
+    rs.stageCells.forEach((cell, i) => {
+      this.pdfWrite(pdf, cell.pct, x + cellW * i + cellW / 2, top + 0.57, 10, cell.fg, { align: "center" });
+      pdf.setFillColor("#" + this.resolveColor(cell.bar));
+      pdf.rect(x + cellW * i + 0.08, top + 0.68, cellW - 0.16, 0.06, "F");
+    });
+    this.pdfWrite(pdf, "HIGHLIGHTS", 0.7, top + 1.12, 9, "var(--color-accent-300)");
+    rs.hlCells.forEach((cell, i) => {
+      const lines = cell.lines.map(line => line.text).join("\n");
+      if (lines) this.pdfWrite(pdf, pdf.splitTextToSize(lines, cellW - 0.12), x + cellW * i + 0.06, top + 1.1, 7, "var(--color-text)");
+    });
+    rs.caps.forEach((cap, row) => {
+      const y = top + 1.85 + row * 0.73;
+      this.pdfWrite(pdf, cap.label, 0.7, y, 10, "var(--color-text)");
+      cap.cells.forEach((cell, i) => {
+        pdf.setFillColor("#" + this.resolveColor(cell.dotBg, "6A6E80"));
+        pdf.circle(x + cellW * i + cellW / 2, y - 0.04, 0.06, "F");
+        this.pdfWrite(pdf, cell.label, x + cellW * i + cellW / 2, y + 0.2, 6.5, cell.fg, { align: "center" });
+      });
+    });
+  }
+  loopHtml(s) {
+    const segs = s.segments.map(sg => "<path d=\"" + sg.d + "\" fill=\"none\" stroke=\"" + sg.stroke + "\" stroke-width=\"" + sg.w + "\" stroke-linecap=\"round\" stroke-dasharray=\"" + sg.dash + "\" opacity=\"" + sg.op + "\"></path>").join("");
+    const pills = s.stages.map(st2 => "<div class=\"xp-pill\" style=\"left:" + st2.lxp + "%;top:" + st2.lyp + "%\">"
+      + "<span class=\"xp-pill-icon\"><i class=\"ph " + esc(st2.icon) + "\"></i></span>"
+      + "<span class=\"xp-pill-name\">" + esc(st2.name) + "</span></div>").join("");
+    const legend = s.legend.map(lg => "<span class=\"xp-legend-item\"><span class=\"xp-legend-dot\" style=\"background:" + lg.dotBg + ";border-color:" + lg.dotBd + "\"></span>" + esc(lg.label) + "</span>").join("");
+    return "<h2 class=\"xp-slide-title\">The delivery loop</h2>"
+      + "<div class=\"xp-loop-canvas\"><svg viewBox=\"0 0 1600 600\" class=\"xp-loop-svg\">"
+      + "<text x=\"" + s.devX + "\" y=\"318\" text-anchor=\"middle\" class=\"xp-loop-label\">DEV</text>"
+      + "<text x=\"" + s.opsX + "\" y=\"318\" text-anchor=\"middle\" class=\"xp-loop-label\">OPS</text>"
+      + "<path d=\"" + s.fullD + "\" fill=\"none\" stroke=\"#2b2e42\" stroke-width=\"16\" stroke-linecap=\"round\"></path>"
+      + segs + "</svg>" + pills + "</div>"
+      + "<div class=\"xp-legend\">" + legend + "</div>";
+  }
+  stageHtml(s) {
+    const st2 = s.stage;
+    const caps = st2.caps.map(c => "<div class=\"xp-cap-row\"><i class=\"ph " + esc(c.icon) + " xp-cap-icon\"></i>"
+      + "<span class=\"xp-cap-label\">" + esc(c.label) + "</span>"
+      + "<span class=\"xp-cap-tools\">" + c.tools.map(t => "<span class=\"xp-chip\">" + esc(t.name) + "</span>").join("") + "</span>"
+      + "<span class=\"xp-cap-status\" style=\"color:" + c.statusFg + "\"><span class=\"xp-dot\" style=\"background:" + c.dotBg + ";border-color:" + c.dotBd + "\"></span>" + esc(c.statusLabel) + "</span></div>").join("");
+    const plan = st2.plan.length ? "<div class=\"xp-plan\"><span class=\"xp-eyebrow\">Highlights</span>"
+      + st2.plan.map(p => "<div class=\"xp-plan-line\">" + esc(p.text) + "</div>").join("") + "</div>" : "";
+    return "<div class=\"xp-stage-head\"><span class=\"xp-stage-num\">0" + (s.index + 1) + "</span>"
+      + "<i class=\"ph " + esc(st2.icon) + " xp-stage-icon\"></i>"
+      + "<h2 class=\"xp-slide-title\">" + esc(st2.name) + "</h2>"
+      + "<span class=\"xp-ready\">" + esc(st2.readyLabel) + "</span></div>"
+      + "<div class=\"xp-cap-list\">" + caps + "</div>" + plan;
+  }
+  roadmapHtml(s) {
+    const rs = s.stage, q = s.quarters, cols = "190px repeat(" + q.length + ", 1fr)";
+    const head = q.map(qh => "<span class=\"xp-q-head-label\">" + esc(qh.label) + "</span>").join("");
+    const ready = rs.stageCells.map(c => "<div class=\"xp-q-cell\"><span class=\"xp-q-label\" style=\"color:" + c.fg + "\">" + esc(c.pct) + "</span><span class=\"xp-q-bar\" style=\"background:" + c.bar + "\"></span></div>").join("");
+    const hl = rs.hlCells.map(h => "<div class=\"xp-q-cell xp-hl-cell\">" + h.lines.map(l => "<div class=\"xp-hl-line\">" + esc(l.text) + "</div>").join("") + "</div>").join("");
+    const caps = rs.caps.map(c => {
+      const cells = c.cells.map(cc => "<div class=\"xp-q-cell\"><span class=\"xp-q-dot\" style=\"background:" + cc.dotBg + ";border-color:" + cc.dotBd + "\"></span></div>").join("");
+      return "<div class=\"xp-cap-timeline\"><span class=\"xp-cap-timeline-label\"><i class=\"ph " + esc(c.icon) + "\"></i>" + esc(c.label) + "</span>"
+        + "<div class=\"xp-q-row\" style=\"grid-template-columns:" + cols + "\"><span></span>" + cells + "</div></div>";
+    }).join("");
+    return "<h2 class=\"xp-slide-title\">" + esc(rs.name) + "</h2><p class=\"xp-slide-subtitle\">" + esc(rs.summary) + "</p>"
+      + "<div class=\"xp-q-row xp-q-head\" style=\"grid-template-columns:" + cols + "\"><span class=\"xp-q-row-label\">Readiness</span>" + head + "</div>"
+      + "<div class=\"xp-q-row\" style=\"grid-template-columns:" + cols + "\"><span></span>" + ready + "</div>"
+      + "<div class=\"xp-q-row xp-hl-row\" style=\"grid-template-columns:" + cols + "\"><span class=\"xp-q-row-label\">Highlights</span>" + hl + "</div>"
+      + "<div class=\"xp-cap-timelines\">" + caps + "</div>";
+  }
+
+  // ---- PPTX slides (native shapes/text/tables via pptxgenjs; same deck as the PDF) ----
+  pptxBg() { return this.resolveColor("var(--color-bg)", "161826"); }
+  async addPptxSlide(pptx, s) {
+    if (s.kind === "cover") return this.pptxCover(pptx, s, false);
+    if (s.kind === "divider") return this.pptxCover(pptx, s, true);
+    if (s.kind === "loop") return this.pptxLoop(pptx, s);
+    if (s.kind === "roadmap") {
+      const slide = pptx.addSlide(), canvas = this.roadmapCanvas(s);
+      slide.addImage({ data: canvas.toDataURL("image/png"), x: 0, y: 0, w: 13.333, h: 7.5 });
+    }
+    if (s.kind === "tooling") {
+      const slide = pptx.addSlide(), canvas = this.toolingCanvas(s);
+      slide.addImage({ data: canvas.toDataURL("image/png"), x: 0, y: 0, w: 13.333, h: 7.5 });
+    }
+    if (s.kind === "tool-roadmap") {
+      const slide = pptx.addSlide(), canvas = this.toolRoadmapCanvas(s);
+      slide.addImage({ data: canvas.toDataURL("image/png"), x: 0, y: 0, w: 13.333, h: 7.5 });
+    }
+  }
+  pptxCover(pptx, s, isDivider) {
+    const slide = pptx.addSlide();
+    slide.background = { color: this.pptxBg() };
+    slide.addText(isDivider ? "SECTION" : "ENGINEERING PLATFORM", { x: 0.7, y: 2.55, w: 12, h: 0.4, fontSize: 12, color: this.resolveColor("var(--color-accent-300)"), fontFace: "Inter" });
+    slide.addText(isDivider ? s.title : "Delivery lifecycle & roadmap", { x: 0.7, y: 2.95, w: 12, h: 1.1, fontSize: 36, bold: true, color: this.resolveColor("var(--color-text)"), fontFace: "Inter" });
+    slide.addText(isDivider ? s.subtitle : s.rangeLabel, { x: 0.7, y: 4.05, w: 12, h: 0.5, fontSize: 16, color: this.resolveColor("var(--color-neutral-300)"), fontFace: "Inter" });
+  }
+  async pptxLoop(pptx, s) {
+    const slide = pptx.addSlide();
+    slide.background = { color: this.pptxBg() };
+    const canvas = await this.pdfLoopCanvas(s);
+    slide.addImage({ data: canvas.toDataURL("image/png"), x: 0, y: 0, w: 13.333, h: 7.5 });
+  }
+  pptxStage(pptx, s) {
+    const slide = pptx.addSlide();
+    slide.background = { color: this.pptxBg() };
+    const st2 = s.stage;
+    slide.addText([
+      { text: "STAGE 0" + (s.index + 1) + "  ", options: { color: this.resolveColor("var(--color-accent-300)"), fontSize: 12 } },
+      { text: st2.name, options: { bold: true, fontSize: 26, color: this.resolveColor("var(--color-text)") } }
+    ], { x: 0.6, y: 0.4, w: 10, h: 0.6, fontFace: "Inter" });
+    slide.addText(st2.readyLabel, { x: 10.1, y: 0.48, w: 2.6, h: 0.4, fontSize: 13, align: "right", color: this.resolveColor("var(--color-accent-300)"), fontFace: "Inter" });
+    const runs = [];
+    st2.caps.forEach(c => {
+      runs.push({ text: "\u25cf  ", options: { color: this.resolveColor(c.dotBg, "6a6e80"), fontSize: 14 } });
+      runs.push({ text: c.label, options: { color: this.resolveColor("var(--color-text)"), fontSize: 14, bold: true } });
+      runs.push({ text: c.tools.length ? "  (" + c.tools.map(t => t.name).join(", ") + ")" : "", options: { color: this.resolveColor("var(--color-neutral-300)"), fontSize: 12 } });
+      runs.push({ text: "   " + c.statusLabel, options: { color: this.resolveColor(c.statusFg), fontSize: 12, breakLine: true } });
+    });
+    slide.addText(runs, { x: 0.6, y: 1.3, w: 12.1, h: 4.4, valign: "top", fontFace: "Inter", lineSpacingMultiple: 1.35 });
+    if (st2.plan.length) {
+      slide.addText("HIGHLIGHTS", { x: 0.6, y: 5.9, w: 5, h: 0.3, fontSize: 11, color: this.resolveColor("var(--color-accent-300)"), fontFace: "Inter" });
+      slide.addText(st2.plan.map(p => "\u2022  " + p.text).join("\n"), { x: 0.6, y: 6.25, w: 12.1, h: 1, fontSize: 12, color: this.resolveColor("var(--color-text)"), fontFace: "Inter" });
+    }
+  }
+  pptxRoadmap(pptx, s) {
+    const slide = pptx.addSlide();
+    slide.background = { color: this.pptxBg() };
+    const rs = s.stage, q = s.quarters, accent = this.resolveColor("var(--color-accent-300)"), txt = this.resolveColor("var(--color-text)"), surface = this.resolveColor("var(--color-surface)");
+    slide.addText(rs.name, { x: 0.6, y: 0.3, w: 10, h: 0.5, fontSize: 24, bold: true, color: txt, fontFace: "Inter" });
+    slide.addText(rs.summary, { x: 0.6, y: 0.8, w: 12, h: 0.35, fontSize: 12, color: this.resolveColor("var(--color-neutral-300)"), fontFace: "Inter" });
+
+    const headRow = [{ text: "Readiness", options: { bold: true, color: accent, fill: { color: surface } } }]
+      .concat(q.map(qh => ({ text: qh.label, options: { bold: true, color: accent, fill: { color: surface } } })));
+    const readyRow = [{ text: "", options: {} }].concat(rs.stageCells.map(c => ({ text: c.pct, options: { color: this.resolveColor(c.fg) } })));
+    const hlRow = [{ text: "Highlights", options: { bold: true, color: accent } }]
+      .concat(rs.hlCells.map(h => ({ text: h.lines.map(l => l.text).join("\n"), options: { fontSize: 9, color: txt } })));
+    const capRows = rs.caps.map(c => [{ text: c.label, options: { color: txt } }]
+      .concat(c.cells.map(cc => ({ text: cc.label, options: { fontSize: 9, color: this.resolveColor(cc.dotBg, "6a6e80") } }))));
+
+    slide.addTable([headRow, readyRow, hlRow].concat(capRows), {
+      x: 0.5, y: 1.3, w: 12.3, h: 5.6, fontSize: 10, fontFace: "Inter",
+      color: txt, fill: { color: this.pptxBg() },
+      border: { type: "solid", color: this.resolveColor("var(--color-divider)", "3f424d"), pt: 0.5 },
+      autoPage: false, valign: "top"
+    });
+  }
+
+  // overrides lets export build a fixed full-overview snapshot without touching real UI state
+  renderVals(overrides) {
+    const st = overrides || this.state, m = st.model;
     const range = m.range || DEFAULT_RANGE;
     const QUARTERS = quarterList(range);
     const cov = st.coverage;
@@ -1425,6 +2034,8 @@ class Component extends DCLogic {
       pulseRef: el => { if (el) { this.pulseEl = el; this.startPulse(); } },
       menuOpen: st.menuOpen, menuExpanded: st.menuOpen ? "true" : "false", menuIcon: st.menuOpen ? "ph-x" : "ph-list",
       toggleMenu: () => this.setState(s => ({ menuOpen: !s.menuOpen })),
+      exportPdf: this.exportPdf,
+      exportPptx: this.exportPptx,
       showLoop: !st.narrow,
       loopHint: st.narrow ? "" : " Click a stage on the loop for a bigger panel.",
       showCaps: st.caps, showCoverage: cov, showTools: st.tools,
