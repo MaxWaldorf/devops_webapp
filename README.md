@@ -17,6 +17,18 @@ among its tools at the selected quarter, and a stage's percentage is the mean of
 capabilities. Tool names, capabilities and highlights are sample content; use
 Editor → "Reset to sample" or load your own JSON.
 
+### Export
+
+The **Export** menu (top right on every tab; in the ☰ menu on phones) offers a PDF document
+or a PowerPoint deck. Both are the same 16:9 deck built from the current model: a cover, the
+lifecycle loop with one card per stage (capabilities and tools, no coverage), then one slide
+per stage (SDLC roadmap) and per tool (Tools roadmap) at the end quarter of the range. In the
+PPTX every element is a native, editable PowerPoint shape or text box (only the small
+Phosphor icons are images); the PDF draws the same layout as images. Roadmap notes use the
+largest size (14 down to 11.5px) at which a stage or tool fits one slide; if it doesn't fit,
+it continues on further slides. Text is set in Inter, so install Inter to get the exact look
+in PowerPoint.
+
 ## Quick start
 
 Requires Python 3 (build) and optionally Docker (hosted image).
@@ -40,7 +52,7 @@ The standalone file is for local use only and is never part of the hosted image.
 | --- | --- |
 | `src/index.html` | The whole design (template and logic). The single source of truth; edit this. |
 | `src/styles.css` | Design-system tokens, component classes, font faces, base styles and the template's static styling; only data-driven styles stay inline in `index.html` (separate file on the hosted site, inlined into the standalone). |
-| `src/vendor/`, `src/fonts/` | Vendored React, DC runtime, design-system bundle, Phosphor icon-name list, Inter and Phosphor fonts. |
+| `src/vendor/`, `src/fonts/` | Vendored React, DC runtime, design-system bundle, Phosphor icon-name list, PptxGenJS/JSZip/jsPDF (export), Inter and Phosphor fonts. |
 | `tools/build.py` | Builds the site and the standalone file and checks they match. |
 | `tools/server.py` | Static server plus the per-browser `/api/model` store (used by `make serve` and the image). |
 | `Dockerfile`, `docker-compose.yml` | Build stage runs build and check; the runtime image serves `dist/web` plus the model API with `tools/server.py`. |
