@@ -20,7 +20,7 @@ and toggleable layers for capabilities, coverage, tooling and roadmap.
 | --- | --- |
 | `src/index.html` | The design (template + logic class). Edit this. |
 | `src/styles.css` | Nocturne tokens/component classes, `@font-face` (Inter, Phosphor), page base styles, `u-…` utilities and `c-…` classes for the template's static styling. Linked from `<head>`. |
-| `src/vendor/` | DC runtime (`dc-support.js`), React 18.3.1 UMD, Nocturne `ds-bundle.js`, Phosphor icon names (`phosphor-icons.js`). |
+| `src/vendor/` | DC runtime (`dc-support.js`), React 18.3.1 UMD, Nocturne `ds-bundle.js`, Phosphor icon names (`phosphor-icons.js`), PptxGenJS + JSZip + jsPDF for export. |
 | `src/fonts/` | Inter (7 subsets, variable) + Phosphor icon font, woff2 only. |
 | `README.md` | Public overview. Keep it current (see Conventions). |
 | `tools/build.py` | Builds both deliverables from `src/` (stdlib Python) and `--check`s they match. |
@@ -123,6 +123,20 @@ saturated floods. Icons are **Phosphor** (`@phosphor-icons/web@2.1.1`, `<i class
    model editor: timeline range, stages & capabilities, tools table (each
    tool→capability assignment has a free-text Note field, stored as `remark`),
    Save/Load JSON. Highlights are edited on the Roadmap tab, not here.
+
+## Export (PDF / PPTX)
+
+`buildDeck()` in the logic class lays every slide out once as a list of drawing ops
+(`rect`, `chip`, `bar`, `line`, `path`, `circle`, `half`, `icon`, `text`) in 1600×900 slide
+units (120 per inch), using a fixed snapshot from `exportData()` (all layers on, no focus,
+end quarter; the lifecycle slide uses the same view with the Coverage layer off, so it shows
+only stages, capabilities and tools). `pptxSlide()` turns each op into a native pptxgenjs shape or text box (the loop
+uses `custGeom` paths, a `path` with `fill` is a closed shape such as the loop's direction
+arrows; icons are cached Phosphor PNGs). `paintSlide()` draws the same ops on a
+1.5× canvas for each jsPDF page. Text is pre-wrapped with real Inter metrics (`wrapText`), so
+both outputs break lines in the same places. Roadmap slides (`gridPages`) use the largest note
+size from 14 down to 11.5px that fits one slide, else paginate at 13px. Add new slide content
+as ops, never as a separate PDF or PPTX code path.
 
 ## Data model
 

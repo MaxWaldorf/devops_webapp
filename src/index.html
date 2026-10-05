@@ -35,15 +35,32 @@
         <sc-for list="{{tabs}}" as="tb" hint-placeholder-count="2">
           <button type="button" class="btn u-gap-7px" style="background:{{tb.bg}};border:1px solid {{tb.bd}};color:{{tb.fg}}" sc-camel-on-click="{{tb.onClick}}"><i class="ph {{tb.icon}}"></i>{{tb.label}}</button>
         </sc-for>
-        <button type="button" class="btn btn-secondary u-border-1px-solid-color-divider u-gap-7px" sc-camel-on-click="{{exportPdf}}"><i class="ph ph-file-pdf"></i>Export PDF</button>
-        <button type="button" class="btn btn-secondary u-border-1px-solid-color-divider u-gap-7px" sc-camel-on-click="{{exportPptx}}"><i class="ph ph-microsoft-powerpoint-logo"></i>Export PPTX</button>
+        <button type="button" class="btn btn-secondary u-border-1px-solid-color-divider u-gap-7px" disabled="{{exportBusy}}" sc-camel-on-click="{{exportPdfClick}}"><i class="ph ph-file-pdf"></i>Export PDF</button>
+        <button type="button" class="btn btn-secondary u-border-1px-solid-color-divider u-gap-7px" disabled="{{exportBusy}}" sc-camel-on-click="{{exportPptxClick}}"><i class="ph ph-microsoft-powerpoint-logo"></i>Export PPTX</button>
       </div>
     </sc-if>
   </div>
 
-  <div class="c-export-actions">
-    <button type="button" class="btn btn-secondary u-border-1px-solid-color-divider u-gap-7px" sc-camel-on-click="{{exportPdf}}"><i class="ph ph-file-pdf"></i>Export PDF</button>
-    <button type="button" class="btn btn-secondary u-border-1px-solid-color-divider u-gap-7px" sc-camel-on-click="{{exportPptx}}"><i class="ph ph-microsoft-powerpoint-logo"></i>Export PPTX</button>
+  <div class="c-export-actions" ref="{{exportRef}}">
+    <button type="button" class="btn c-export-trigger" aria-haspopup="menu" aria-expanded="{{exportExpanded}}" data-open="{{exportExpanded}}" data-busy="{{exportBusyAttr}}" sc-camel-on-click="{{toggleExport}}"><i class="ph {{exportIcon}} c-export-trigger-icon"></i>{{exportLabel}}<i class="ph ph-caret-down c-export-caret"></i></button>
+    <sc-if value="{{exportOpen}}">
+      <div class="c-export-menu" role="menu" aria-label="Export the deck">
+        <div class="c-export-head"><span class="c-export-eyebrow">Export the deck</span><span class="c-export-meta">{{exportMeta}}</span></div>
+        <button type="button" role="menuitem" class="btn c-export-item" disabled="{{exportBusy}}" sc-camel-on-click="{{exportPdfClick}}">
+          <span class="c-export-tile"><i class="ph ph-file-pdf"></i></span>
+          <span class="c-export-copy"><span class="c-export-title">PDF document</span><span class="c-export-sub">Fixed pages, ready to share or print</span></span>
+          <i class="ph ph-download-simple c-export-go"></i>
+        </button>
+        <button type="button" role="menuitem" class="btn c-export-item" disabled="{{exportBusy}}" sc-camel-on-click="{{exportPptxClick}}">
+          <span class="c-export-tile"><i class="ph ph-microsoft-powerpoint-logo"></i></span>
+          <span class="c-export-copy"><span class="c-export-title">PowerPoint deck</span><span class="c-export-sub">Editable shapes and text</span></span>
+          <i class="ph ph-download-simple c-export-go"></i>
+        </button>
+        <sc-if value="{{hasExportErr}}">
+          <div class="c-export-err"><i class="ph ph-warning-circle"></i>{{exportErr}}</div>
+        </sc-if>
+      </div>
+    </sc-if>
   </div>
 
   <sc-if value="{{isLoop}}" hint-placeholder-val="{{true}}">
@@ -812,7 +829,7 @@ function loadModel() {
 }
 
 class Component extends DCLogic {
-  state = { allIcons: Array.isArray(window.PHOSPHOR_ICONS) ? window.PHOSPHOR_ICONS : null, iconBuf: {}, iconOpen: null, drag: null, dragOver: null, dropAt: null, tab: "loop", roadmapView: "sdlc", menuOpen: false, narrow: false, cursor: 0, hover: null, selected: null, tPos: 0, caps: true, coverage: true, tools: false, model: loadModel() };
+  state = { allIcons: Array.isArray(window.PHOSPHOR_ICONS) ? window.PHOSPHOR_ICONS : null, iconBuf: {}, iconOpen: null, drag: null, dragOver: null, dropAt: null, tab: "loop", roadmapView: "sdlc", menuOpen: false, exportOpen: false, exporting: null, exportDone: null, exportErr: "", narrow: false, cursor: 0, hover: null, selected: null, tPos: 0, caps: true, coverage: true, tools: false, model: loadModel() };
 
   flash(msg, bad) {
     this.setState({ ioMsg: msg, ioBad: !!bad });
@@ -882,6 +899,11 @@ class Component extends DCLogic {
     this.mqH = () => this.setState({ narrow: this.mq.matches });
     this.mqH();
     this.mq.addEventListener("change", this.mqH);
+    // the export menu closes on a click outside it or on Escape
+    this.docDown = e => { if (this.state.exportOpen && this.exportEl && !this.exportEl.contains(e.target)) this.setState({ exportOpen: false }); };
+    this.docKey = e => { if (e.key === "Escape" && this.state.exportOpen) this.setState({ exportOpen: false }); };
+    document.addEventListener("pointerdown", this.docDown);
+    document.addEventListener("keydown", this.docKey);
     const ms = Math.max(800, (this.props.cycleSeconds ?? 3) * 1000);
     this.timer = setInterval(() => {
       if (this.props.autoCycle === false || this.state.tab !== "loop" || this.state.narrow) return;
@@ -892,6 +914,9 @@ class Component extends DCLogic {
   componentWillUnmount() {
     clearInterval(this.timer);
     if (this.mq) this.mq.removeEventListener("change", this.mqH);
+    document.removeEventListener("pointerdown", this.docDown);
+    document.removeEventListener("keydown", this.docKey);
+    clearTimeout(this.exportT);
     clearTimeout(this.flashT);
     clearTimeout(this.putT);
     if (this.pulseAnim) this.pulseAnim.cancel();
@@ -950,7 +975,9 @@ class Component extends DCLogic {
     return "n";
   }
 
-  // ---- export: paginated PDF (print) and native PPTX, both from one fixed-overview deck ----
+  // ---- export: one deck for PDF and PPTX. Each slide is laid out once as a list of drawing
+  // ops in 1600×900 slide units (120 per inch). PPTX turns every op into a native, editable
+  // shape; PDF paints the same list onto one canvas per page ----
   cssVar(name) {
     if (!this._cssVars) this._cssVars = getComputedStyle(document.documentElement);
     return this._cssVars.getPropertyValue(name).trim();
@@ -965,82 +992,358 @@ class Component extends DCLogic {
       mm = v.match(/#[0-9a-fA-F]{3,8}|var\(--[\w-]+\)/);
       return mm ? this.resolveColor(mm[0], fb) : fb;
     }
-    if (/^#[0-9a-fA-F]{3,8}$/.test(v)) return v.slice(1).toUpperCase();
+    if (/^#[0-9a-fA-F]{3}$/.test(v)) return v.slice(1).replace(/./g, ch => ch + ch).toUpperCase();
+    if (/^#[0-9a-fA-F]{6}/.test(v)) return v.slice(1, 7).toUpperCase();
     return fb;
   }
-  // a fixed full-overview snapshot (every layer on, no selection, roadmap's end quarter)
-  // computed without touching real UI state, so export never flickers the live app
+  // like resolveColor, but transparent gives null (no fill/stroke); color-mix() tokens come from the palette
+  hex(v) {
+    v = String(v || "").trim();
+    if (!v || v === "transparent" || v === "none") return null;
+    if (v === "var(--color-divider)") return this._pal.divider;
+    return this.resolveColor(v, "E9E9ED");
+  }
+  mixHex(a, b, t) {
+    const ch = (h, i) => parseInt(h.slice(i, i + 2), 16);
+    return [0, 2, 4].map(i => Math.round(ch(a, i) * t + ch(b, i) * (1 - t)).toString(16).padStart(2, "0")).join("").toUpperCase();
+  }
+  exportPalette() {
+    const c = n => this.resolveColor("var(--color-" + n + ")", "E9E9ED");
+    const p = { bg: c("bg"), surface: c("surface"), text: c("text") };
+    [100, 200, 300, 400, 500, 600, 700, 800, 900].forEach(n => { p["n" + n] = c("neutral-" + n); p["a" + n] = c("accent-" + n); });
+    p.divider = this.mixHex(p.text, p.bg, 0.16);
+    p.cardBd = this.mixHex(p.text, p.surface, 0.16);
+    p.band = this.mixHex(p.a900, p.n900, 0.45);
+    p.bandBd = this.mixHex(p.a800, p.bg, 0.6);
+    return p;
+  }
+  // a fixed full-overview snapshot (every layer on, no focus, roadmap's end quarter)
+  // computed without touching real UI state, so export never flickers the live app;
+  // the lifecycle slide (`loop`) is the same view with the Coverage layer off
   exportData() {
     const st = this.state;
     const exportState = Object.assign({}, st, {
       tab: "roadmap", roadmapView: "sdlc", caps: true, coverage: true, tools: true,
-      selected: null, hover: null, narrow: false, tPos: this.maxStop()
+      selected: null, hover: null, cursor: -1, narrow: false, tPos: this.maxStop()
     });
     const sdlc = this.renderVals(exportState);
     const tools = this.renderVals(Object.assign({}, exportState, { roadmapView: "tools" }));
-    return Object.assign({}, sdlc, { rmTools: tools.rmTools });
+    const loop = this.renderVals(Object.assign({}, exportState, { tab: "loop", coverage: false }));
+    return Object.assign({}, sdlc, { rmTools: tools.rmTools, loop });
   }
-  toolingRows(stage) {
-    return stage.caps.flatMap(cap => cap.tools.map(tool => {
-      const maxChars = Math.max(0, ...tool.cells.map(cell => String(cell.note || "").length));
-      const noteFont = maxChars > 280 ? 8 : maxChars > 120 ? 9 : 11;
-      const charsPerLine = noteFont === 8 ? 46 : noteFont === 9 ? 40 : 32;
-      const lineCount = Math.max(1, Math.ceil(maxChars / charsPerLine));
-      return { cap, tool, noteFont, noteLineHeight: noteFont + 2, rowH: Math.max(72, 42 + lineCount * (noteFont + 2)) };
+  exportFonts() {
+    return Promise.all(["400 12px Inter", "500 12px Inter", "600 12px Inter", "12px Phosphor"].map(f => document.fonts.load(f)));
+  }
+  measureText(text, size, weight, ls) {
+    const ctx = this._mctx || (this._mctx = document.createElement("canvas").getContext("2d"));
+    ctx.font = (weight || 400) + " " + size + "px Inter";
+    text = String(text);
+    return ctx.measureText(text).width + (ls || 0) * size * text.length;
+  }
+  // greedy word wrap with real Inter metrics, so canvas and PowerPoint break in the same places
+  wrapText(text, width, size, weight) {
+    const lines = [];
+    let cur = "";
+    String(text || "").split(/\s+/).filter(Boolean).forEach(w => {
+      const next = cur ? cur + " " + w : w;
+      if (cur && this.measureText(next, size, weight) > width) { lines.push(cur); cur = w; } else cur = next;
+    });
+    if (cur) lines.push(cur);
+    return lines;
+  }
+  // one bullet per non-empty line, each wrapped to the cell
+  bulletParas(text, width, size) {
+    return String(text || "").split("\n").map(l => l.trim()).filter(Boolean)
+      .map(l => ({ text: l, bullet: true, lines: this.wrapText(l, width - size, size) }));
+  }
+  textOp(x, y, w, str, o) {
+    o = o || {};
+    const size = o.size || 12, weight = o.weight || 400, lh = o.lh || size * 1.3;
+    str = String(str == null ? "" : str);
+    const paras = o.paras || [{ text: str, lines: o.wrap ? this.wrapText(str, w, size, weight) : [str] }];
+    const n = paras.reduce((t, p) => t + p.lines.length, 0);
+    return { k: "text", x, y, w, h: n * lh, size, weight, lh, paras, wrap: !!(o.wrap || o.paras), color: o.color || this._pal.text, align: o.align || "left", ls: o.ls || 0 };
+  }
+  eyebrow(x, y, w, str, size) {
+    return this.textOp(x, y, w, String(str).toUpperCase(), { size: size || 10.5, color: this._pal.a300, ls: 0.13 });
+  }
+  statusCode(label) {
+    return Object.keys(STATUS).find(k => STATUS[k].label === label) || "n";
+  }
+  // the coverage dots of the site: full, left half + ring, empty ring, muted disc
+  dotOps(code, cx, cy, r) {
+    if (code === "c") return [{ k: "circle", cx, cy, r, fill: this.hex(STATUS.c.bg) }];
+    if (code === "p") return [{ k: "half", cx, cy, r, fill: this.hex("var(--color-accent-300)") }, { k: "circle", cx, cy, r, stroke: this.hex(STATUS.p.bd), sw: 1 }];
+    if (code === "n") return [{ k: "circle", cx, cy, r, stroke: this.hex(STATUS.n.bd), sw: 1 }];
+    return [{ k: "circle", cx, cy, r, fill: this.hex(STATUS.x.bg) }];
+  }
+  // a template bar background: solid colour, or a repeating-linear-gradient dash pattern
+  barSpec(v) {
+    const m = /repeating-linear-gradient\(90deg,\s*(\S+?)\s+0\s+([\d.]+)px,\s*transparent\s+[\d.]+px\s+([\d.]+)px\)/.exec(String(v));
+    return m ? { color: this.hex(m[1]), dash: [+m[2], m[3] - m[2]] } : { color: this.hex(v), dash: null };
+  }
+  barOp(x, y, w, h, v) {
+    return Object.assign({ k: "bar", x, y, w, h }, this.barSpec(v));
+  }
+  shiftOps(ops, dy) {
+    return ops.map(op => {
+      const o = Object.assign({}, op);
+      ["y", "y1", "y2", "cy"].forEach(f => { if (o[f] != null) o[f] += dy; });
+      if (o.pts) o.pts = o.pts.map(p => [p[0], p[1] + dy]);
+      return o;
+    });
+  }
+
+  buildDeck() {
+    this._pal = this.exportPalette();
+    const d = this.exportData(), quarters = d.quarterHeaders.map(h => h.label);
+    const date = new Date().toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" });
+    const range = this.state.model.range || DEFAULT_RANGE;
+    const span = "From " + qName(range, 0) + " To " + qName(range, quarters.length - 1);
+    const deck = [this.coverSlide("Engineering Platform", "Delivery lifecycle & roadmap", span, date, d.fullD), this.loopSlide(d.loop)];
+    deck.push(this.coverSlide("Section", "SDLC Roadmap", span));
+    d.rmStages.forEach(rs => deck.push(...this.gridSlides({
+      title: rs.name, icon: rs.icon, summary: rs.summary, quarters, head: "Stage readiness",
+      readiness: rs.stageCells, highlights: rs.hlCells,
+      blocks: rs.caps.map(c => ({ icon: c.icon, label: c.label, cells: c.cells, rows: c.tools.map(t => ({ name: t.name, cells: t.cells })) }))
+    })));
+    deck.push(this.coverSlide("Section", "Tools Roadmap", span));
+    d.rmTools.filter(t => t.caps.length).forEach(t => deck.push(...this.gridSlides({
+      title: t.name, icon: "ph-wrench", summary: t.summary, quarters, head: "Core capabilities",
+      blocks: t.caps.map(c => ({ icon: c.icon, label: c.label, sub: c.stage, cells: c.statusCells, rows: [{ name: "Roadmap notes", eyebrow: true, cells: c.cells }] }))
+    })));
+    return deck;
+  }
+  coverSlide(kicker, title, sub, date, loopD) {
+    const P = this._pal, ops = [];
+    if (loopD) {
+      const pts = this.pathPoints(loopD).map(p => [1010 + p[0] * 0.34, 200 + p[1] * 0.34]);
+      ops.push({ k: "path", pts, color: P.a800, w: 6 });
+    }
+    ops.push({ k: "rect", x: 84, y: 300, w: 56, h: 4, r: 2, fill: P.a400 });
+    ops.push(this.textOp(84, 324, 1300, kicker.toUpperCase(), { size: 15, color: P.a300, ls: 0.16 }));
+    ops.push(this.textOp(84, 352, 1430, title, { size: 60, weight: 600, lh: 76 }));
+    ops.push(this.textOp(84, 440, 1430, sub, { size: 22, color: P.n300 }));
+    if (date) ops.push(this.textOp(84, 478, 1430, date, { size: 16, color: P.n400 }));
+    return ops;
+  }
+  pathPoints(d) {
+    const n = String(d).match(/-?\d+(\.\d+)?/g) || [], pts = [];
+    for (let i = 0; i + 1 < n.length; i += 2) pts.push([+n[i], +n[i + 1]]);
+    return pts;
+  }
+
+  // one stage card, like the cards under the loop on the site (Coverage layer off); y is its top edge
+  stageCard(st, x, y, w, k) {
+    const P = this._pal, ops = [], pad = 14 * k, badge = 28 * k, right = x + w - pad;
+    ops.push({ k: "rect", x: x + pad, y: y + pad, w: badge, h: badge, r: 7 * k, fill: P.n900 });
+    ops.push({ k: "icon", name: st.icon, x: x + pad + 6 * k, y: y + pad + 6 * k, size: 16 * k, color: P.a300 });
+    const nameSize = 17 * k, mid = y + pad + badge / 2;
+    ops.push(this.textOp(x + pad + badge + 10 * k, mid - nameSize * 0.65, right - (x + pad + badge + 10 * k), st.name, { size: nameSize, weight: 600 }));
+    let cy = y + pad + badge + 12 * k;
+    const labelSize = 13 * k, labelLh = labelSize * 1.3, chipSize = 11.5 * k;
+    const chipH = chipSize * 1.5 + 4 * k, chipPad = 7 * k, chipGap = 5 * k;
+    st.caps.forEach((c, ci) => {
+      if (ci) cy += 10 * k;
+      const lx = x + pad + 22 * k;
+      ops.push({ k: "icon", name: c.icon, x: x + pad, y: cy + (labelLh - 14 * k) / 2, size: 14 * k, color: P.a400 });
+      const label = this.textOp(lx, cy, right - lx, c.label, { size: labelSize, lh: labelLh, wrap: true });
+      ops.push(label);
+      cy += label.h + 5 * k;
+      let chx = lx, line = 0;
+      c.tools.forEach(t => {
+        const tw = Math.min(right - lx, this.measureText(t.name, chipSize) + 2 * chipPad);
+        if (chx > lx && chx + tw > right) { chx = lx; line++; }
+        ops.push({ k: "chip", x: chx, y: cy + line * (chipH + 4 * k), w: tw, h: chipH, r: 5 * k, text: t.name, size: chipSize, color: this.hex(t.fg), fill: this.hex(t.bg), stroke: this.hex(t.bd) });
+        chx += tw + chipGap;
+      });
+      cy += (line + 1) * chipH + line * 4 * k;
+    });
+    const h = cy + pad - y;
+    ops.unshift({ k: "rect", x, y, w, h, r: 10 * k, fill: P.surface, stroke: P.cardBd, sw: 1 });
+    return { h, ops };
+  }
+  loopSlide(d) {
+    const P = this._pal, ops = [], M = 48, gap = 32, top = 120, bottom = 876;
+    ops.push(this.textOp(M, 34, 900, "The delivery loop", { size: 40, weight: 600, lh: 48 }));
+    ops.push(this.textOp(M, 86, 900, "Core capabilities and tooling by lifecycle stage", { size: 16, color: P.n300 }));
+    // cards in two rows (stages above and below the loop's centre line), shrunk together until
+    // the loop's crossing stays visible between the rows
+    const rows = [[], []];
+    d.stages.forEach(st => rows[st.lyp < 50 ? 0 : 1].push(st));
+    rows.forEach(r => r.sort((a, b) => a.lxp - b.lxp));
+    const cols = Math.max(rows[0].length, rows[1].length, 1), cw = (1600 - 2 * M - gap * (cols - 1)) / cols;
+    let k = 1, hs;
+    for (; ; k -= 0.04) {
+      hs = rows.map(r => Math.max(0, ...r.map(st => this.stageCard(st, 0, 0, cw, k).h)));
+      if (hs[0] + hs[1] <= bottom - top - 120 || k <= 0.6) break;
+    }
+    // the loop, scaled to the slide width and centred in the gap between the card rows
+    const s = 0.95, ox = 800 * (1 - s), oy = (top + hs[0] + bottom - hs[1]) / 2 - 300 * s;
+    const T = p => [ox + p[0] * s, oy + p[1] * s];
+    const word = 92 * s;
+    [["DEV", d.devX], ["OPS", d.opsX]].forEach(([t, x]) => {
+      const c = T([x, 318]);
+      ops.push(this.textOp(c[0] - 200, c[1] - word * 0.36 - word * 0.5, 400, t, { size: word, weight: 500, lh: word, align: "center", color: "33375A" }));
+    });
+    // one continuous loop in a single style (no per-stage readiness): soft halo, track, bright line
+    const loop = this.pathPoints(d.fullD).map(T);
+    ops.push({ k: "path", pts: loop, color: P.a700, w: 30 * s, alpha: 0.35 });
+    ops.push({ k: "path", pts: loop, color: P.a800, w: 16 * s });
+    ops.push({ k: "path", pts: loop, color: P.a300, w: 7 * s });
+    const cards = [];
+    rows.forEach((r, ri) => r.forEach((st, i) => {
+      const x = M + i * (cw + gap), card = this.stageCard(st, x, 0, cw, k);
+      cards.push({ x, y: ri ? bottom - card.h : top, w: cw, h: card.h, ops: card.ops });
     }));
+    ops.push(...this.loopArrows(loop, cards, T([800, 300])));
+    cards.forEach(c => ops.push(...this.shiftOps(c.ops, c.y)));
+    return ops;
   }
-  toolingPages(rows) {
-    const pages = [], maxHeight = 640;
-    let page = [], height = 0;
-    rows.forEach(row => {
-      if (page.length && height + row.rowH > maxHeight) { pages.push(page); page = []; height = 0; }
-      page.push(row); height += row.rowH;
+
+  // arrowheads along the loop in path order (= the cycle's direction): exactly one at the middle of
+  // each visible stretch (not under a card, not on the centre crossing), so every side and arm gets one
+  loopArrows(pts, cards, centre) {
+    const clear = 22, minRun = 30;
+    const hidden = p => Math.hypot(p[0] - centre[0], p[1] - centre[1]) < 36
+      || cards.some(c => p[0] > c.x - clear && p[0] < c.x + c.w + clear && p[1] > c.y - clear && p[1] < c.y + c.h + clear);
+    const runs = [];
+    let run = null;
+    for (let i = 1; i < pts.length; i++) {
+      const a = pts[i - 1], b = pts[i];
+      if (hidden(a) || hidden(b)) { run = null; continue; }
+      if (!run) runs.push(run = { segs: [], len: 0 });
+      const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+      run.segs.push([a, b, len]);
+      run.len += len;
+    }
+    return runs.filter(r => r.len >= minRun).map(r => {
+      let at = r.len / 2, seg = r.segs[0];
+      for (seg of r.segs) { if (at <= seg[2]) break; at -= seg[2]; }
+      const [a, b, len] = seg, f = len ? Math.min(1, at / len) : 0;
+      const p = [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f], tx = (b[0] - a[0]) / (len || 1), ty = (b[1] - a[1]) / (len || 1);
+      return { k: "path", fill: this._pal.a100, pts: [
+        [p[0] + tx * 11, p[1] + ty * 11],
+        [p[0] - tx * 8 - ty * 10, p[1] - ty * 8 + tx * 10],
+        [p[0] - tx * 3, p[1] - ty * 3],
+        [p[0] - tx * 8 + ty * 10, p[1] - ty * 8 - tx * 10]
+      ] };
     });
-    if (page.length) pages.push(page);
-    return pages;
   }
-  roadmapPages(stage) {
-    const pages = [], maxHeight = 510;
-    let page = [], height = 0;
-    stage.caps.forEach(cap => {
-      const tools = this.toolingRows({ caps: [cap] });
-      const capHeight = 42 + tools.reduce((total, tool) => total + tool.rowH, 0);
-      if (page.length && height + capHeight > maxHeight) { pages.push(page); page = []; height = 0; }
-      page.push({ cap, tools, height: capHeight }); height += capHeight;
+
+  // roadmap grid (SDLC stage or tool): the largest note size that fits one slide (down to the
+  // site's own 11.5px), else paginated at a comfortable 13px
+  gridSlides(spec) {
+    for (const fs of [14, 13, 12, 11.5]) {
+      const pages = this.gridPages(spec, fs);
+      if (pages.length === 1) return pages;
+    }
+    return this.gridPages(spec, 13);
+  }
+  gridPages(spec, fs) {
+    const P = this._pal, M = 48, W = 1600, limit = 868, labelW = 250, gap = 12, lh = fs * 1.35;
+    const nq = spec.quarters.length, x0 = M + labelW, cw = (W - M - x0 - gap * (nq - 1)) / nq;
+    const colX = i => x0 + i * (cw + gap);
+
+    // quarter header (+ readiness bars for a stage), repeated on every page
+    const qOps = [];
+    let qH;
+    qOps.push(this.eyebrow(M, 2, labelW - 10, spec.head));
+    if (spec.readiness) {
+      spec.readiness.forEach((c, i) => {
+        qOps.push(this.textOp(colX(i), 0, cw, c.q + " · " + c.pct, { size: 12.5, color: this.hex(c.fg) }));
+        qOps.push(this.barOp(colX(i), 21, cw, 5, c.bar));
+      });
+      qH = 26 + 14;
+    } else {
+      spec.quarters.forEach((q, i) => qOps.push(this.textOp(colX(i), 0, cw, q, { size: 12.5, color: P.n300 })));
+      qH = 16 + 12;
+    }
+
+    // highlights band, first page only
+    let hl = null;
+    if (spec.highlights && spec.highlights.some(c => c.lines.length)) {
+      const cells = spec.highlights.map((c, i) => this.textOp(colX(i), 10, cw - 6, "", { size: fs, lh, paras: this.bulletParas(c.text, cw - 6, fs) }));
+      const h = 20 + Math.max(lh, ...cells.map(c => c.h));
+      hl = { h: h + 14, ops: [{ k: "rect", x: M - 10, y: 0, w: W - 2 * M + 20, h, r: 8, fill: P.band, stroke: P.bandBd, sw: 1 }, this.eyebrow(M, 12, labelW - 10, "Highlights")].concat(cells.filter(c => c.h)) };
+    }
+
+    // capability blocks: a status row, then one row per tool with its bar and notes
+    const blocks = spec.blocks.map(b => {
+      const head = [{ k: "icon", name: b.icon, x: M, y: 1, size: 16, color: P.a400 }];
+      const label = this.textOp(M + 24, 0, labelW - 34, b.label, { size: 14, weight: 500, lh: 18, wrap: true });
+      head.push(label);
+      let hh = label.h;
+      if (b.sub) { head.push(this.textOp(M + 24, hh, labelW - 34, b.sub, { size: 11, color: P.n300 })); hh += 15; }
+      b.cells.forEach((c, i) => {
+        head.push(...this.dotOps(this.statusCode(c.label), colX(i) + 5, 9, 4.5));
+        head.push(this.textOp(colX(i) + 15, 9 - 11.5 * 0.65, cw - 15, c.label, { size: 11.5, color: this.hex(c.fg) }));
+      });
+      const rows = b.rows.map(r => {
+        const ops = [];
+        let nameH;
+        if (r.eyebrow) { ops.push(this.eyebrow(M + 24, 1, labelW - 34, r.name, 10)); nameH = 14; } else {
+          ops.push({ k: "icon", name: "ph-wrench", x: M + 24, y: 1, size: 13, color: P.n300 });
+          const name = this.textOp(M + 43, 0, labelW - 53, r.name, { size: 12.5, color: P.n100, wrap: true });
+          ops.push(name);
+          nameH = name.h;
+        }
+        let notesH = 0;
+        r.cells.forEach((c, i) => {
+          ops.push(this.barOp(colX(i), 2, cw, 4, c.bar));
+          const paras = this.bulletParas(c.note, cw, fs);
+          if (paras.length) {
+            const t = this.textOp(colX(i), 12, cw, "", { size: fs, lh, paras });
+            ops.push(t);
+            notesH = Math.max(notesH, 12 + t.h);
+          }
+        });
+        return { ops, h: Math.max(nameH, notesH, 8) + 10 };
+      });
+      return { head, headH: Math.max(hh, 18) + 4, rows };
     });
-    if (page.length) pages.push(page);
-    return pages;
-  }
-  toolRoadmapPages(tool) {
-    const pages = [], maxRows = 6;
-    for (let start = 0; start < tool.caps.length; start += maxRows) pages.push(tool.caps.slice(start, start + maxRows));
-    return pages;
-  }
-  buildSlides(compactRoadmaps) {
-    const d = this.exportData();
-    const slides = [{ kind: "cover", rangeLabel: d.rangeLabel }];
-    slides.push({ kind: "loop", stages: d.stages, segments: d.segments, fullD: d.fullD, devX: d.devX, opsX: d.opsX, legend: d.legend });
-    slides.push({ kind: "divider", title: "SDLC Roadmap", subtitle: d.rangeLabel });
-    d.rmStages.forEach((rs, i) => {
-      const pages = this.roadmapPages(rs);
-      if (compactRoadmaps) {
-        slides.push({ kind: "roadmap", stage: rs, quarters: d.quarterHeaders, index: i, caps: pages.flat(), page: 1, pages: 1, compact: true });
-      } else {
-        pages.forEach((caps, page) => slides.push({ kind: "roadmap", stage: rs, quarters: d.quarterHeaders, index: i, caps, page: page + 1, pages: pages.length }));
-      }
+
+    // paginate: keep a block together when it fits a page, split it between tool rows otherwise
+    const pages = [];
+    let ops, y, pageTop;
+    const newPage = () => {
+      ops = this.shiftOps(qOps, 96);
+      y = 96 + qH;
+      if (!pages.length && hl) { ops.push(...this.shiftOps(hl.ops, y)); y += hl.h; }
+      pages.push(ops);
+      pageTop = y;
+    };
+    const placeHead = b => {
+      ops.push({ k: "line", x1: M, y1: y, x2: W - M, y2: y, color: P.divider, w: 1 });
+      ops.push(...this.shiftOps(b.head, y + 10));
+      y += 10 + b.headH;
+    };
+    newPage();
+    blocks.forEach(b => {
+      const total = 10 + b.headH + b.rows.reduce((t, r) => t + r.h, 0);
+      if (y + total > limit && y > pageTop) newPage();
+      placeHead(b);
+      b.rows.forEach(r => {
+        if (y + r.h > limit && y > pageTop + 10 + b.headH) { newPage(); placeHead(b); }
+        ops.push(...this.shiftOps(r.ops, y));
+        y += r.h;
+      });
+      y += 6;
     });
-    slides.push({ kind: "divider", title: "Tools Roadmap", subtitle: d.rangeLabel });
-    d.rmTools.forEach((tool, i) => {
-      const pages = this.toolRoadmapPages(tool);
-      pages.forEach((caps, page) => slides.push({ kind: "tool-roadmap", tool, caps, quarters: d.quarterHeaders, index: i, page: page + 1, pages: pages.length }));
+
+    // title row last, once the page count is known
+    return pages.map((pg, pi) => {
+      const head = [{ k: "rect", x: M, y: 30, w: 40, h: 40, r: 9, fill: P.n900 }, { k: "icon", name: spec.icon, x: M + 9, y: 39, size: 22, color: P.a300 }];
+      const titleW = Math.min(900, this.measureText(spec.title, 30, 600) + 4);
+      head.push(this.textOp(M + 54, 31, titleW, spec.title, { size: 30, weight: 600, lh: 38 }));
+      const pageLabel = pages.length > 1 ? "Page " + (pi + 1) + " of " + pages.length : "";
+      const pageW = pageLabel ? this.measureText(pageLabel, 13) + 2 : 0;
+      head.push(this.textOp(M + 70 + titleW, 41, W - M - pageW - 24 - (M + 70 + titleW), spec.summary, { size: 14, color: P.n300 }));
+      if (pageLabel) head.push(this.textOp(W - M - pageW, 42, pageW, pageLabel, { size: 13, color: P.n300, align: "right" }));
+      return head.concat(pg);
     });
-    return slides;
   }
-  getExportRoot() {
-    let el = document.getElementById("export-root");
-    if (!el) { el = document.createElement("div"); el.id = "export-root"; document.body.appendChild(el); }
-    return el;
-  }
+
   downloadBlob(blob, fileName) {
     const link = document.createElement("a");
     const url = URL.createObjectURL(blob);
@@ -1051,524 +1354,198 @@ class Component extends DCLogic {
     link.remove();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
+  // runs one export with a busy state on the trigger; a failure reopens the menu with the reason
+  runExport = async kind => {
+    if (this.state.exporting) return;
+    clearTimeout(this.exportT);
+    this.setState({ exporting: kind, exportDone: null, exportErr: "", exportOpen: false, menuOpen: false });
+    await new Promise(r => setTimeout(r, 40)); // let the spinner paint before the synchronous layout work
+    const err = kind === "pdf" ? await this.exportPdf() : await this.exportPptx();
+    this.setState({ exporting: null, exportDone: err ? null : kind, exportErr: err || "", exportOpen: !!err });
+    if (!err) this.exportT = setTimeout(() => this.setState({ exportDone: null }), 2500);
+  };
   exportPdf = async () => {
-    if (!window.jspdf) return this.flash("PDF export isn't available", true);
+    if (!window.jspdf) return "PDF export isn't available";
     try {
+      await this.exportFonts();
       const pdf = new window.jspdf.jsPDF({ orientation: "landscape", unit: "in", format: [13.333, 7.5], compress: true });
-      const slides = this.buildSlides(false);
-      for (let i = 0; i < slides.length; i++) {
+      this.buildDeck().forEach((ops, i) => {
         if (i) pdf.addPage([13.333, 7.5], "landscape");
-        await this.addPdfSlide(pdf, slides[i]);
-      }
+        pdf.addImage(this.paintSlide(ops, 1.5), "PNG", 0, 0, 13.333, 7.5, undefined, "FAST");
+      });
       this.downloadBlob(pdf.output("blob"), "devops-lifecycle.pdf");
+      return "";
     } catch (e) {
-      this.flash("Could not generate the PDF file", true);
+      console.error(e);
+      return "Could not generate the PDF file";
     }
   };
   exportPptx = async () => {
-    if (!window.PptxGenJS) return this.flash("PowerPoint export isn't available", true);
+    if (!window.PptxGenJS) return "PowerPoint export isn't available";
     try {
+      await this.exportFonts();
       const pptx = new window.PptxGenJS();
       pptx.defineLayout({ name: "XWIDE", width: 13.333, height: 7.5 });
       pptx.layout = "XWIDE";
-      for (const s of this.buildSlides(true)) await this.addPptxSlide(pptx, s);
+      this.buildDeck().forEach(ops => this.pptxSlide(pptx, ops));
       this.downloadBlob(await pptx.write({ outputType: "blob" }), "devops-lifecycle.pptx");
+      return "";
     } catch (e) {
-      this.flash("Could not generate the PowerPoint file", true);
+      console.error(e);
+      return "Could not generate the PowerPoint file";
     }
   };
 
-  // ---- PDF slide markup (plain strings: these never go through the sc- template) ----
-  slideHtml(s) {
-    const bg = this.cssVar("--color-bg") || "#161826", text = this.cssVar("--color-text") || "#e9e9ed";
-    const body = s.kind === "cover" ? this.coverHtml(s)
-      : s.kind === "divider" ? this.dividerHtml(s)
-      : s.kind === "loop" ? this.loopHtml(s)
-      : s.kind === "stage" ? this.stageHtml(s)
-      : this.roadmapHtml(s);
-    return "<section class=\"xp-slide\" style=\"background:" + bg + ";color:" + text + "\">" + body + "</section>";
-  }
-  coverHtml(s) {
-    const date = new Date().toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" });
-    return "<div class=\"xp-cover\"><span class=\"xp-kicker\">Engineering Platform</span>"
-      + "<h1 class=\"xp-cover-title\">Delivery lifecycle &amp; roadmap</h1>"
-      + "<p class=\"xp-cover-sub\">" + esc(s.rangeLabel) + "</p>"
-      + "<p class=\"xp-cover-date\">" + esc(date) + "</p></div>";
-  }
-  dividerHtml(s) {
-    return "<div class=\"xp-cover\"><span class=\"xp-kicker\">Section</span>"
-      + "<h1 class=\"xp-cover-title\">" + esc(s.title) + "</h1>"
-      + "<p class=\"xp-cover-sub\">" + esc(s.subtitle) + "</p></div>";
-  }
-  async pdfLoopCanvas(s) {
-    await Promise.all(["9px Inter", "11px Inter", "700 15px Inter", "22px Phosphor", "14px Phosphor"].map(f => document.fonts.load(f)));
-    const bg = this.pptxBg(), text = this.resolveColor("var(--color-text)"), surface = this.resolveColor("var(--color-surface)");
-    const svg = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"1600\" height=\"900\" viewBox=\"0 0 1600 900\">"
-      + "<rect width=\"1600\" height=\"900\" fill=\"#" + bg + "\"/>"
-      + "<text x=\"72\" y=\"78\" fill=\"#" + text + "\" font-family=\"Inter, sans-serif\" font-size=\"42\" font-weight=\"600\">The delivery loop</text>"
-      + "<g transform=\"translate(0 150)\"><text x=\"" + s.devX + "\" y=\"318\" text-anchor=\"middle\" fill=\"#75798C\" font-family=\"Inter, sans-serif\" font-size=\"92\" font-weight=\"500\">DEV</text>"
-      + "<text x=\"" + s.opsX + "\" y=\"318\" text-anchor=\"middle\" fill=\"#75798C\" font-family=\"Inter, sans-serif\" font-size=\"92\" font-weight=\"500\">OPS</text>"
-      + "<path d=\"" + s.fullD + "\" fill=\"none\" stroke=\"#FFFFFF\" stroke-width=\"34\" stroke-linecap=\"round\" opacity=\"0.10\"/>"
-      + "<path d=\"" + s.fullD + "\" fill=\"none\" stroke=\"#F5F4FF\" stroke-width=\"18\" stroke-linecap=\"round\" opacity=\"0.45\"/>"
-      + "<path d=\"" + s.fullD + "\" fill=\"none\" stroke=\"#FFFFFF\" stroke-width=\"7\" stroke-linecap=\"round\"/>"
-      + "</g><text x=\"72\" y=\"855\" fill=\"#" + this.resolveColor("var(--color-neutral-300)") + "\" font-family=\"Inter, sans-serif\" font-size=\"18\">Core capabilities and tooling by lifecycle stage</text></svg>";
-    return new Promise((resolve, reject) => {
-      const image = new Image(), canvas = document.createElement("canvas");
-      canvas.width = 1600; canvas.height = 900;
-      image.onload = () => {
-        const ctx = canvas.getContext("2d");
-        ctx.drawImage(image, 0, 0);
-        s.stages.forEach(st2 => {
-          const cardPadding = 16, labelX = cardPadding + 22, toolX = labelX, chipGap = 7;
-          const contentWidth = Math.max(...st2.caps.map(c => {
-            ctx.font = "11px Inter";
-            const labelWidth = ctx.measureText(c.label).width + labelX + cardPadding;
-            ctx.font = "9px Inter";
-            const widestChipWidth = Math.max(0, ...c.tools.map(tool => ctx.measureText(tool.name).width + 20)) + toolX + cardPadding;
-            return Math.max(labelWidth, widestChipWidth);
-          }));
-          const cardWidth = Math.max(190, Math.min(320, Math.ceil(contentWidth)));
-          const rows = st2.caps.map(c => {
-            ctx.font = "9px Inter";
-            const tools = c.tools.length ? c.tools : ["No tooling"];
-            let cursorX = toolX, lines = 1;
-            const chips = tools.map(tool => {
-              const width = ctx.measureText(tool.name).width + (c.tools.length ? 20 : 0);
-              if (cursorX + width > cardWidth - cardPadding && cursorX > toolX) {
-                cursorX = toolX;
-                lines += 1;
-              }
-              const chip = { name: tool.name, x: cursorX, line: lines, width };
-              cursorX += width + chipGap;
-              return chip;
-            });
-            return { capability: c, chips, height: 16 + lines * 22 };
-          });
-          const cardHeight = 48 + rows.reduce((height, row) => height + row.height, 0) + cardPadding;
-          const x = Math.max(cardWidth / 2, Math.min(1600 - cardWidth / 2, st2.lxp * 16));
-          const y = Math.max(cardHeight / 2, Math.min(900 - cardHeight / 2 - 40, 150 + st2.lyp * 6));
-          ctx.fillStyle = "#" + surface; ctx.strokeStyle = "#" + this.resolveColor("var(--color-divider)", "3F424D");
-          ctx.lineWidth = 1; ctx.beginPath(); ctx.roundRect(x - cardWidth / 2, y - cardHeight / 2, cardWidth, cardHeight, 10); ctx.fill(); ctx.stroke();
-          ctx.font = "700 15px Inter"; ctx.fillStyle = "#" + text; ctx.fillText(st2.name, x - cardWidth / 2 + cardPadding, y - cardHeight / 2 + 24);
-          let rowY = y - cardHeight / 2 + 48;
-          rows.forEach(row => {
-            const c = row.capability;
-            ctx.font = "14px Phosphor"; ctx.fillStyle = "#" + this.resolveColor("var(--color-accent-400)"); ctx.fillText(this.iconGlyph(c.icon), x - cardWidth / 2 + cardPadding, rowY);
-            ctx.font = "11px Inter"; ctx.fillStyle = "#" + text; ctx.fillText(c.label, x - cardWidth / 2 + labelX, rowY);
-            row.chips.forEach(chip => {
-              const chipY = rowY + 5 + (chip.line - 1) * 22;
-              if (c.tools.length) {
-                ctx.fillStyle = "#" + this.resolveColor("var(--color-accent-900)"); ctx.strokeStyle = "#" + this.resolveColor("var(--color-accent-700)");
-                ctx.beginPath(); ctx.roundRect(x - cardWidth / 2 + chip.x, chipY, chip.width, 19, 5); ctx.fill(); ctx.stroke();
-                ctx.fillStyle = "#" + this.resolveColor("var(--color-accent-200)"); ctx.fillText(chip.name, x - cardWidth / 2 + chip.x + 9, chipY + 13);
-              } else {
-                ctx.fillStyle = "#" + this.resolveColor("var(--color-neutral-300)"); ctx.fillText(chip.name, x - cardWidth / 2 + chip.x, chipY + 13);
-              }
-            });
-            rowY += row.height;
-          });
-        });
-        resolve(canvas);
-      };
-      image.onerror = reject;
-      image.src = "data:image/svg+xml;base64," + btoa(unescape(encodeURIComponent(svg)));
-    });
-  }
+  // ---- PDF: paint the ops onto a canvas (scale 1.5 keeps text sharp at a reasonable file size) ----
   iconGlyph(icon) {
-    const el = document.createElement("i");
-    el.className = "ph " + icon;
-    document.body.appendChild(el);
-    const content = getComputedStyle(el, "::before").content;
-    el.remove();
-    return content && content !== "none" ? content.replace(/^['"]|['"]$/g, "") : "•";
-  }
-  drawCoverageDot(ctx, x, y, cell, radius) {
-    const covered = "#" + this.resolveColor("var(--color-accent-300)");
-    const partial = "#" + this.resolveColor("var(--color-accent-500)");
-    const muted = "#" + this.resolveColor("var(--color-divider)", "6A6E80");
-    const status = cell.label;
-    ctx.save();
-    ctx.lineWidth = 1;
-    if (status === "Covered") {
-      ctx.fillStyle = covered; ctx.beginPath(); ctx.arc(x, y, radius, 0, Math.PI * 2); ctx.fill();
-    } else if (status === "Partially") {
-      ctx.fillStyle = covered; ctx.beginPath(); ctx.arc(x, y, radius, Math.PI / 2, Math.PI * 1.5); ctx.closePath(); ctx.fill();
-      ctx.strokeStyle = partial; ctx.beginPath(); ctx.arc(x, y, radius, 0, Math.PI * 2); ctx.stroke();
-    } else if (status === "Not covered") {
-      ctx.strokeStyle = muted; ctx.beginPath(); ctx.arc(x, y, radius, 0, Math.PI * 2); ctx.stroke();
-    } else {
-      ctx.fillStyle = "#" + this.resolveColor("var(--color-neutral-700)"); ctx.beginPath(); ctx.arc(x, y, radius, 0, Math.PI * 2); ctx.fill();
+    const cache = this._glyphs || (this._glyphs = {});
+    if (!(icon in cache)) {
+      const el = document.createElement("i");
+      el.className = "ph " + icon;
+      document.body.appendChild(el);
+      const content = getComputedStyle(el, "::before").content;
+      el.remove();
+      cache[icon] = content && content !== "none" ? content.replace(/^['"]|['"]$/g, "") : "•";
     }
-    ctx.restore();
+    return cache[icon];
   }
-  roadmapCanvas(s) {
-    const canvas = document.createElement("canvas"), ctx = canvas.getContext("2d"), rs = s.stage, quarters = s.quarters;
-    canvas.width = 1600; canvas.height = 900;
-    const color = v => "#" + this.resolveColor(v, "E9E9ED");
-    const wrap = (text, width, maxLines) => {
-      const words = String(text || "").split(/\s+/), lines = [], current = [];
-      words.forEach(word => {
-        const next = current.concat([word]).join(" ");
-        if (current.length && ctx.measureText(next).width > width) { lines.push(current.join(" ")); current.length = 0; }
-        current.push(word);
-      });
-      if (current.length) lines.push(current.join(" "));
-      if (maxLines && lines.length > maxLines) { lines.length = maxLines; }
-      return lines;
-    };
-    ctx.fillStyle = color("var(--color-bg)"); ctx.fillRect(0, 0, 1600, 900);
-    ctx.font = "600 42px Inter"; ctx.fillStyle = color("var(--color-text)"); ctx.fillText(rs.name, 70, 72);
-    ctx.font = "18px Inter"; ctx.fillStyle = color("var(--color-neutral-300)"); ctx.fillText(rs.summary, 70, 104);
-    const labelX = 350, gridW = 1170, cellW = gridW / quarters.length, top = 155;
-    ctx.font = "600 14px Inter"; ctx.fillStyle = color("var(--color-accent-300)"); ctx.fillText("READINESS", 70, top + 20);
-    quarters.forEach((q, i) => { ctx.textAlign = "center"; ctx.fillText(q.label, labelX + cellW * i + cellW / 2, top + 20); });
-    rs.stageCells.forEach((cell, i) => {
-      ctx.font = "15px Inter"; ctx.fillStyle = color(cell.fg); ctx.fillText(cell.pct, labelX + cellW * i + cellW / 2, top + 56);
-      ctx.fillStyle = color(cell.bar); ctx.fillRect(labelX + cellW * i + 10, top + 70, cellW - 20, 8);
-    });
-    ctx.textAlign = "left"; ctx.font = "600 14px Inter"; ctx.fillStyle = color("var(--color-accent-300)"); ctx.fillText("HIGHLIGHTS", 70, top + 120);
-    ctx.font = "12px Inter";
-    let highlightLines = rs.hlCells.map(cell => wrap(cell.lines.map(line => line.text).join(" · "), cellW - 18));
-    let highlightFont = 12, highlightLineHeight = 16;
-    const longestHighlight = Math.max(1, ...highlightLines.map(lines => lines.length));
-    if (longestHighlight * highlightLineHeight > 190) {
-      highlightFont = Math.max(8, Math.floor(190 / longestHighlight) - 2);
-      highlightLineHeight = highlightFont + 3;
-      ctx.font = highlightFont + "px Inter";
-      highlightLines = rs.hlCells.map(cell => wrap(cell.lines.map(line => line.text).join(" · "), cellW - 18));
-    }
-    const highlightHeight = Math.max(1, ...highlightLines.map(lines => lines.length)) * highlightLineHeight;
-    rs.hlCells.forEach((cell, i) => {
-      ctx.font = highlightFont + "px Inter"; ctx.fillStyle = color("var(--color-text)");
-      const lines = highlightLines[i];
-      lines.forEach((line, lineIndex) => ctx.fillText(line, labelX + cellW * i + 9, top + 120 + lineIndex * highlightLineHeight));
-    });
-    let y = Math.max(365, top + 150 + highlightHeight);
-    const capGroups = s.caps || rs.caps.map(cap => ({ cap, tools: this.toolingRows({ caps: [cap] }) }));
-    const contentHeight = capGroups.reduce((total, group) => total + 42 + group.tools.reduce((toolTotal, tool) => toolTotal + tool.rowH, 0), 0);
-    const scale = s.compact ? Math.min(1, (840 - y) / Math.max(1, contentHeight)) : 1;
-    capGroups.forEach(({ cap, tools }) => {
-      ctx.strokeStyle = color("var(--color-divider)"); ctx.beginPath(); ctx.moveTo(70, y - 28); ctx.lineTo(1520, y - 28); ctx.stroke();
-      ctx.font = "23px Phosphor"; ctx.fillStyle = color("var(--color-accent-400)"); ctx.fillText(this.iconGlyph(cap.icon), 72, y);
-      ctx.font = "600 " + Math.max(12, 18 * scale) + "px Inter"; ctx.fillStyle = color("var(--color-text)");
-      wrap(cap.label, 230, 2).forEach((line, lineIndex) => ctx.fillText(line, 108, y - 7 + lineIndex * 20 * scale));
-      cap.cells.forEach((cell, i) => {
-        const cx = labelX + cellW * i + cellW / 2;
-        ctx.font = Math.max(9, 12 * scale) + "px Inter"; ctx.fillStyle = color(cell.fg); ctx.textAlign = "center";
-        const labelWidth = ctx.measureText(cell.label).width;
-        this.drawCoverageDot(ctx, cx - labelWidth / 2 - 7, y - 5, cell, 5);
-        ctx.textAlign = "left"; ctx.fillText(cell.label, cx - labelWidth / 2 + 3, y - 1);
-      });
-      ctx.textAlign = "left";
-      y += 42 * scale;
-      tools.forEach(toolRow => {
-        const toolY = y;
-        ctx.font = "14px Phosphor"; ctx.fillStyle = color("var(--color-neutral-300)"); ctx.fillText(this.iconGlyph("ph-wrench"), 108, toolY);
-        ctx.font = Math.max(10, 13 * scale) + "px Inter"; ctx.fillStyle = color("var(--color-neutral-100)"); ctx.fillText(toolRow.tool.name, 132, toolY);
-        toolRow.tool.cells.forEach((cell, i) => {
-          const x = labelX + cellW * i + 8;
-          ctx.fillStyle = color(cell.bar); ctx.fillRect(x, toolY - 6 * scale, cellW - 16, Math.max(3, 5 * scale));
-          const noteFont = Math.max(7, toolRow.noteFont * scale), noteLineHeight = Math.max(9, toolRow.noteLineHeight * scale);
-          ctx.font = noteFont + "px Inter"; ctx.fillStyle = color("var(--color-text)");
-          wrap(cell.note, cellW - 18).forEach((line, lineIndex) => ctx.fillText(line, x + 1, toolY + 15 * scale + lineIndex * noteLineHeight));
-        });
-        y += toolRow.rowH * scale;
-      });
-    });
+  paintIcon(ctx, name, color, x, y, size) {
+    ctx.font = size + "px Phosphor";
+    ctx.fillStyle = "#" + color;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(this.iconGlyph(name), x + size / 2, y + size / 2);
+  }
+  paintSlide(ops, scale) {
+    const canvas = document.createElement("canvas"), ctx = canvas.getContext("2d");
+    canvas.width = 1600 * scale; canvas.height = 900 * scale;
+    ctx.scale(scale, scale);
+    ctx.fillStyle = "#" + this._pal.bg;
+    ctx.fillRect(0, 0, 1600, 900);
+    ops.forEach(op => { ctx.save(); this.paintOp(ctx, op); ctx.restore(); });
     return canvas;
   }
-  toolingCanvas(s) {
-    const canvas = document.createElement("canvas"), ctx = canvas.getContext("2d"), rs = s.stage, quarters = s.quarters;
-    canvas.width = 1600; canvas.height = 900;
-    const color = v => "#" + this.resolveColor(v, "E9E9ED");
-    const wrap = (text, width, maxLines) => {
-      const words = String(text || "").split(/\s+/).filter(Boolean), lines = [], current = [];
-      words.forEach(word => {
-        const next = current.concat([word]).join(" ");
-        if (current.length && ctx.measureText(next).width > width) { lines.push(current.join(" ")); current.length = 0; }
-        current.push(word);
-      });
-      if (current.length) lines.push(current.join(" "));
-      return maxLines ? lines.slice(0, maxLines) : lines;
-    };
-    ctx.fillStyle = color("var(--color-bg)"); ctx.fillRect(0, 0, 1600, 900);
-    ctx.font = "600 42px Inter"; ctx.fillStyle = color("var(--color-text)"); ctx.fillText(rs.name + " tooling roadmap", 70, 72);
-    ctx.font = "18px Inter"; ctx.fillStyle = color("var(--color-neutral-300)");
-    ctx.fillText("Tool coverage and roadmap notes by core capability", 70, 104);
-    if (s.pages > 1) ctx.fillText("Page " + s.page + " of " + s.pages, 1380, 104);
-    const labelX = 350, gridW = 1170, cellW = gridW / quarters.length, top = 150;
-    ctx.font = "600 14px Inter"; ctx.fillStyle = color("var(--color-accent-300)"); ctx.fillText("CAPABILITY / TOOL", 70, top + 18);
-    quarters.forEach((q, i) => { ctx.textAlign = "center"; ctx.fillText(q.label, labelX + cellW * i + cellW / 2, top + 18); });
-    ctx.textAlign = "left";
-    let y = top + 58;
-    s.rows.forEach(row => {
-      ctx.strokeStyle = color("var(--color-divider)"); ctx.beginPath(); ctx.moveTo(70, y - 23); ctx.lineTo(1520, y - 23); ctx.stroke();
-      ctx.font = "16px Phosphor"; ctx.fillStyle = color("var(--color-accent-400)"); ctx.fillText(this.iconGlyph(row.cap.icon), 72, y);
-      ctx.font = "600 13px Inter"; ctx.fillStyle = color("var(--color-text)");
-      wrap(row.cap.label, 220, 2).forEach((line, lineIndex) => ctx.fillText(line, 100, y - 6 + lineIndex * 15));
-      ctx.font = "12px Inter"; ctx.fillStyle = color("var(--color-neutral-200)"); ctx.fillText(row.tool.name, 100, y + 28);
-      row.tool.cells.forEach((cell, i) => {
-        const x = labelX + cellW * i + 8;
-        ctx.fillStyle = color(cell.bar); ctx.fillRect(x, y - 4, cellW - 16, 6);
-        ctx.font = row.noteFont + "px Inter"; ctx.fillStyle = color("var(--color-text)");
-        wrap(cell.note, cellW - 18).forEach((line, lineIndex) => ctx.fillText(line, x + 1, y + 19 + lineIndex * row.noteLineHeight));
-      });
-      y += row.rowH;
-    });
-    return canvas;
-  }
-  toolRoadmapCanvas(s) {
-    const canvas = document.createElement("canvas"), ctx = canvas.getContext("2d"), tool = s.tool, quarters = s.quarters;
-    canvas.width = 1600; canvas.height = 900;
-    const color = v => "#" + this.resolveColor(v, "E9E9ED");
-    const wrap = (text, width, maxLines) => {
-      const words = String(text || "").split(/\s+/).filter(Boolean), lines = [], current = [];
-      words.forEach(word => {
-        const next = current.concat([word]).join(" ");
-        if (current.length && ctx.measureText(next).width > width) { lines.push(current.join(" ")); current.length = 0; }
-        current.push(word);
-      });
-      if (current.length) lines.push(current.join(" "));
-      return maxLines ? lines.slice(0, maxLines) : lines;
-    };
-    ctx.fillStyle = color("var(--color-bg)"); ctx.fillRect(0, 0, 1600, 900);
-    ctx.font = "600 42px Inter"; ctx.fillStyle = color("var(--color-text)"); ctx.fillText(tool.name, 70, 72);
-    ctx.font = "18px Inter"; ctx.fillStyle = color("var(--color-neutral-300)"); ctx.fillText(tool.summary, 70, 104);
-    if (s.pages > 1) ctx.fillText("Page " + s.page + " of " + s.pages, 1380, 104);
-    const labelX = 350, gridW = 1170, cellW = gridW / quarters.length, top = 150, rowH = 108;
-    ctx.font = "600 14px Inter"; ctx.fillStyle = color("var(--color-accent-300)"); ctx.fillText("CORE CAPABILITY", 70, top + 18);
-    quarters.forEach((q, i) => { ctx.textAlign = "center"; ctx.fillText(q.label, labelX + cellW * i + cellW / 2, top + 18); });
-    ctx.textAlign = "left";
-    s.caps.forEach((cap, row) => {
-      const y = top + 62 + row * rowH;
-      ctx.strokeStyle = color("var(--color-divider)"); ctx.beginPath(); ctx.moveTo(70, y - 25); ctx.lineTo(1520, y - 25); ctx.stroke();
-      ctx.font = "18px Phosphor"; ctx.fillStyle = color("var(--color-accent-400)"); ctx.fillText(this.iconGlyph(cap.icon), 72, y);
-      ctx.font = "600 15px Inter"; ctx.fillStyle = color("var(--color-text)"); wrap(cap.label, 220, 2).forEach((line, lineIndex) => ctx.fillText(line, 102, y - 6 + lineIndex * 17));
-      ctx.font = "11px Inter";
-      cap.statusCells.forEach((cell, i) => {
-        const cx = labelX + cellW * i + cellW / 2, width = ctx.measureText(cell.label).width;
-        this.drawCoverageDot(ctx, cx - width / 2 - 7, y - 5, cell, 5);
-        ctx.fillStyle = color(cell.fg); ctx.fillText(cell.label, cx - width / 2 + 3, y - 1);
-      });
-      cap.cells.forEach((cell, i) => {
-        const x = labelX + cellW * i + 8;
-        ctx.fillStyle = color(cell.bar); ctx.fillRect(x, y + 25, cellW - 16, 5);
-        ctx.font = "10px Inter"; ctx.fillStyle = color("var(--color-text)");
-        wrap(cell.note, cellW - 18, 3).forEach((line, lineIndex) => ctx.fillText(line, x + 1, y + 43 + lineIndex * 12));
-      });
-    });
-    return canvas;
-  }
-  pdfColor(pdf, color) {
-    const value = this.resolveColor(color, "E9E9ED");
-    pdf.setTextColor("#" + value);
-    return value;
-  }
-  pdfGround(pdf) {
-    pdf.setFillColor("#" + this.pptxBg());
-    pdf.rect(0, 0, 13.333, 7.5, "F");
-  }
-  pdfWrite(pdf, text, x, y, size, color, options) {
-    pdf.setFont("helvetica", options && options.bold ? "bold" : "normal");
-    pdf.setFontSize(size);
-    this.pdfColor(pdf, color || "var(--color-text)");
-    pdf.text(String(text), x, y, options || {});
-  }
-  async addPdfSlide(pdf, s) {
-    this.pdfGround(pdf);
-    if (s.kind === "loop") {
-      const canvas = await this.pdfLoopCanvas(s);
-      pdf.addImage(canvas.toDataURL("image/png"), "PNG", 0, 0, 13.333, 7.5, undefined, "FAST");
-      return;
-    }
-    if (s.kind === "roadmap") {
-      const canvas = this.roadmapCanvas(s);
-      pdf.addImage(canvas.toDataURL("image/png"), "PNG", 0, 0, 13.333, 7.5, undefined, "FAST");
-      return;
-    }
-    if (s.kind === "tooling") {
-      const canvas = this.toolingCanvas(s);
-      pdf.addImage(canvas.toDataURL("image/png"), "PNG", 0, 0, 13.333, 7.5, undefined, "FAST");
-      return;
-    }
-    if (s.kind === "tool-roadmap") {
-      const canvas = this.toolRoadmapCanvas(s);
-      pdf.addImage(canvas.toDataURL("image/png"), "PNG", 0, 0, 13.333, 7.5, undefined, "FAST");
-      return;
-    }
-    if (s.kind === "cover" || s.kind === "divider") {
-      const title = s.kind === "cover" ? "Delivery lifecycle & roadmap" : s.title;
-      const subtitle = s.kind === "cover" ? s.rangeLabel : s.subtitle;
-      this.pdfWrite(pdf, s.kind === "cover" ? "ENGINEERING PLATFORM" : "SECTION", 0.7, 2.75, 12, "var(--color-accent-300)");
-      this.pdfWrite(pdf, title, 0.7, 3.45, 32, "var(--color-text)", { bold: true });
-      this.pdfWrite(pdf, subtitle, 0.7, 3.85, 15, "var(--color-neutral-300)");
-      return;
-    }
-    if (s.kind === "stage") {
-      const st2 = s.stage;
-      this.pdfWrite(pdf, "STAGE 0" + (s.index + 1), 0.7, 0.7, 11, "var(--color-accent-300)");
-      this.pdfWrite(pdf, st2.name, 0.7, 1.08, 25, "var(--color-text)", { bold: true });
-      this.pdfWrite(pdf, st2.readyLabel, 12.6, 0.92, 12, "var(--color-accent-300)", { align: "right" });
-      let y = 1.65;
-      st2.caps.forEach(c => {
-        pdf.setFillColor("#" + this.resolveColor(c.dotBg, "6A6E80"));
-        pdf.circle(0.84, y - 0.05, 0.055, "F");
-        this.pdfWrite(pdf, c.label, 1.03, y, 14, "var(--color-text)", { bold: true });
-        this.pdfWrite(pdf, c.tools.map(t => t.name).join(", ") || "No tool", 1.03, y + 0.23, 10, "var(--color-neutral-300)");
-        this.pdfWrite(pdf, c.statusLabel, 12.6, y, 10, c.statusFg, { align: "right" });
-        y += 0.9;
-      });
-      if (st2.plan.length) {
-        this.pdfWrite(pdf, "HIGHLIGHTS", 0.7, 5.55, 10, "var(--color-accent-300)");
-        st2.plan.forEach((p, i) => this.pdfWrite(pdf, "•  " + p.text, 0.7, 5.9 + i * 0.28, 10, "var(--color-text)"));
+  paintOp(ctx, op) {
+    const col = c => "#" + c;
+    if (op.alpha != null) ctx.globalAlpha = op.alpha;
+    if (op.k === "rect" || op.k === "chip") {
+      ctx.beginPath(); ctx.roundRect(op.x, op.y, op.w, op.h, op.r || 0);
+      if (op.fill) { ctx.fillStyle = col(op.fill); ctx.fill(); }
+      if (op.stroke) { ctx.lineWidth = op.sw || 1; ctx.strokeStyle = col(op.stroke); ctx.stroke(); }
+      if (op.k === "chip") {
+        ctx.font = op.size + "px Inter"; ctx.fillStyle = col(op.color); ctx.textAlign = "center"; ctx.textBaseline = "middle";
+        ctx.fillText(op.text, op.x + op.w / 2, op.y + op.h / 2 + 0.5);
       }
-      return;
+    } else if (op.k === "bar") {
+      if (!op.color) return;
+      ctx.fillStyle = col(op.color);
+      if (!op.dash) { ctx.beginPath(); ctx.roundRect(op.x, op.y, op.w, op.h, op.h / 2); ctx.fill(); return; }
+      for (let x = op.x; x < op.x + op.w; x += op.dash[0] + op.dash[1]) ctx.fillRect(x, op.y, Math.min(op.dash[0], op.x + op.w - x), op.h);
+    } else if (op.k === "line" || op.k === "path") {
+      const pts = op.pts || [[op.x1, op.y1], [op.x2, op.y2]];
+      ctx.beginPath();
+      pts.forEach((p, i) => (i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1])));
+      if (op.fill) { ctx.closePath(); ctx.fillStyle = col(op.fill); ctx.fill(); return; }
+      ctx.lineWidth = op.w; ctx.strokeStyle = col(op.color);
+      if (op.k === "path") { ctx.lineCap = "round"; ctx.lineJoin = "round"; }
+      if (op.dash) ctx.setLineDash(op.dash);
+      ctx.stroke();
+    } else if (op.k === "circle" || op.k === "half") {
+      ctx.beginPath();
+      if (op.k === "half") { ctx.arc(op.cx, op.cy, op.r, Math.PI / 2, Math.PI * 1.5); ctx.closePath(); } else ctx.arc(op.cx, op.cy, op.r, 0, Math.PI * 2);
+      if (op.fill) { ctx.fillStyle = col(op.fill); ctx.fill(); }
+      if (op.stroke) { ctx.lineWidth = op.sw || 1; ctx.strokeStyle = col(op.stroke); ctx.stroke(); }
+    } else if (op.k === "icon") {
+      this.paintIcon(ctx, op.name, op.color, op.x, op.y, op.size);
+    } else if (op.k === "text") {
+      ctx.font = op.weight + " " + op.size + "px Inter";
+      ctx.textAlign = op.align; ctx.textBaseline = "alphabetic";
+      if (op.ls) ctx.letterSpacing = op.ls * op.size + "px";
+      let row = 0;
+      op.paras.forEach(p => p.lines.forEach((line, li) => {
+        const base = op.y + row * op.lh + op.lh / 2 + op.size * 0.36;
+        if (p.bullet && li === 0) {
+          ctx.fillStyle = col(this._pal.a400);
+          ctx.beginPath(); ctx.arc(op.x + op.size * 0.3, base - op.size * 0.33, op.size * 0.16, 0, Math.PI * 2); ctx.fill();
+        }
+        ctx.fillStyle = col(op.color);
+        const x = op.align === "center" ? op.x + op.w / 2 : op.align === "right" ? op.x + op.w : op.x + (p.bullet ? op.size : 0);
+        ctx.fillText(line, x, base);
+        row++;
+      }));
     }
-    const rs = s.stage, quarters = s.quarters;
-    this.pdfWrite(pdf, rs.name, 0.7, 0.6, 24, "var(--color-text)", { bold: true });
-    this.pdfWrite(pdf, rs.summary, 0.7, 0.9, 10, "var(--color-neutral-300)");
-    const x = 2.8, cellW = 9.8 / quarters.length, top = 1.35;
-    this.pdfWrite(pdf, "READINESS", 0.7, top + 0.18, 9, "var(--color-accent-300)");
-    quarters.forEach((q, i) => this.pdfWrite(pdf, q.label, x + cellW * i + cellW / 2, top + 0.18, 9, "var(--color-accent-300)", { align: "center" }));
-    rs.stageCells.forEach((cell, i) => {
-      this.pdfWrite(pdf, cell.pct, x + cellW * i + cellW / 2, top + 0.57, 10, cell.fg, { align: "center" });
-      pdf.setFillColor("#" + this.resolveColor(cell.bar));
-      pdf.rect(x + cellW * i + 0.08, top + 0.68, cellW - 0.16, 0.06, "F");
-    });
-    this.pdfWrite(pdf, "HIGHLIGHTS", 0.7, top + 1.12, 9, "var(--color-accent-300)");
-    rs.hlCells.forEach((cell, i) => {
-      const lines = cell.lines.map(line => line.text).join("\n");
-      if (lines) this.pdfWrite(pdf, pdf.splitTextToSize(lines, cellW - 0.12), x + cellW * i + 0.06, top + 1.1, 7, "var(--color-text)");
-    });
-    rs.caps.forEach((cap, row) => {
-      const y = top + 1.85 + row * 0.73;
-      this.pdfWrite(pdf, cap.label, 0.7, y, 10, "var(--color-text)");
-      cap.cells.forEach((cell, i) => {
-        pdf.setFillColor("#" + this.resolveColor(cell.dotBg, "6A6E80"));
-        pdf.circle(x + cellW * i + cellW / 2, y - 0.04, 0.06, "F");
-        this.pdfWrite(pdf, cell.label, x + cellW * i + cellW / 2, y + 0.2, 6.5, cell.fg, { align: "center" });
-      });
-    });
-  }
-  loopHtml(s) {
-    const segs = s.segments.map(sg => "<path d=\"" + sg.d + "\" fill=\"none\" stroke=\"" + sg.stroke + "\" stroke-width=\"" + sg.w + "\" stroke-linecap=\"round\" stroke-dasharray=\"" + sg.dash + "\" opacity=\"" + sg.op + "\"></path>").join("");
-    const pills = s.stages.map(st2 => "<div class=\"xp-pill\" style=\"left:" + st2.lxp + "%;top:" + st2.lyp + "%\">"
-      + "<span class=\"xp-pill-icon\"><i class=\"ph " + esc(st2.icon) + "\"></i></span>"
-      + "<span class=\"xp-pill-name\">" + esc(st2.name) + "</span></div>").join("");
-    const legend = s.legend.map(lg => "<span class=\"xp-legend-item\"><span class=\"xp-legend-dot\" style=\"background:" + lg.dotBg + ";border-color:" + lg.dotBd + "\"></span>" + esc(lg.label) + "</span>").join("");
-    return "<h2 class=\"xp-slide-title\">The delivery loop</h2>"
-      + "<div class=\"xp-loop-canvas\"><svg viewBox=\"0 0 1600 600\" class=\"xp-loop-svg\">"
-      + "<text x=\"" + s.devX + "\" y=\"318\" text-anchor=\"middle\" class=\"xp-loop-label\">DEV</text>"
-      + "<text x=\"" + s.opsX + "\" y=\"318\" text-anchor=\"middle\" class=\"xp-loop-label\">OPS</text>"
-      + "<path d=\"" + s.fullD + "\" fill=\"none\" stroke=\"#2b2e42\" stroke-width=\"16\" stroke-linecap=\"round\"></path>"
-      + segs + "</svg>" + pills + "</div>"
-      + "<div class=\"xp-legend\">" + legend + "</div>";
-  }
-  stageHtml(s) {
-    const st2 = s.stage;
-    const caps = st2.caps.map(c => "<div class=\"xp-cap-row\"><i class=\"ph " + esc(c.icon) + " xp-cap-icon\"></i>"
-      + "<span class=\"xp-cap-label\">" + esc(c.label) + "</span>"
-      + "<span class=\"xp-cap-tools\">" + c.tools.map(t => "<span class=\"xp-chip\">" + esc(t.name) + "</span>").join("") + "</span>"
-      + "<span class=\"xp-cap-status\" style=\"color:" + c.statusFg + "\"><span class=\"xp-dot\" style=\"background:" + c.dotBg + ";border-color:" + c.dotBd + "\"></span>" + esc(c.statusLabel) + "</span></div>").join("");
-    const plan = st2.plan.length ? "<div class=\"xp-plan\"><span class=\"xp-eyebrow\">Highlights</span>"
-      + st2.plan.map(p => "<div class=\"xp-plan-line\">" + esc(p.text) + "</div>").join("") + "</div>" : "";
-    return "<div class=\"xp-stage-head\"><span class=\"xp-stage-num\">0" + (s.index + 1) + "</span>"
-      + "<i class=\"ph " + esc(st2.icon) + " xp-stage-icon\"></i>"
-      + "<h2 class=\"xp-slide-title\">" + esc(st2.name) + "</h2>"
-      + "<span class=\"xp-ready\">" + esc(st2.readyLabel) + "</span></div>"
-      + "<div class=\"xp-cap-list\">" + caps + "</div>" + plan;
-  }
-  roadmapHtml(s) {
-    const rs = s.stage, q = s.quarters, cols = "190px repeat(" + q.length + ", 1fr)";
-    const head = q.map(qh => "<span class=\"xp-q-head-label\">" + esc(qh.label) + "</span>").join("");
-    const ready = rs.stageCells.map(c => "<div class=\"xp-q-cell\"><span class=\"xp-q-label\" style=\"color:" + c.fg + "\">" + esc(c.pct) + "</span><span class=\"xp-q-bar\" style=\"background:" + c.bar + "\"></span></div>").join("");
-    const hl = rs.hlCells.map(h => "<div class=\"xp-q-cell xp-hl-cell\">" + h.lines.map(l => "<div class=\"xp-hl-line\">" + esc(l.text) + "</div>").join("") + "</div>").join("");
-    const caps = rs.caps.map(c => {
-      const cells = c.cells.map(cc => "<div class=\"xp-q-cell\"><span class=\"xp-q-dot\" style=\"background:" + cc.dotBg + ";border-color:" + cc.dotBd + "\"></span></div>").join("");
-      return "<div class=\"xp-cap-timeline\"><span class=\"xp-cap-timeline-label\"><i class=\"ph " + esc(c.icon) + "\"></i>" + esc(c.label) + "</span>"
-        + "<div class=\"xp-q-row\" style=\"grid-template-columns:" + cols + "\"><span></span>" + cells + "</div></div>";
-    }).join("");
-    return "<h2 class=\"xp-slide-title\">" + esc(rs.name) + "</h2><p class=\"xp-slide-subtitle\">" + esc(rs.summary) + "</p>"
-      + "<div class=\"xp-q-row xp-q-head\" style=\"grid-template-columns:" + cols + "\"><span class=\"xp-q-row-label\">Readiness</span>" + head + "</div>"
-      + "<div class=\"xp-q-row\" style=\"grid-template-columns:" + cols + "\"><span></span>" + ready + "</div>"
-      + "<div class=\"xp-q-row xp-hl-row\" style=\"grid-template-columns:" + cols + "\"><span class=\"xp-q-row-label\">Highlights</span>" + hl + "</div>"
-      + "<div class=\"xp-cap-timelines\">" + caps + "</div>";
   }
 
-  // ---- PPTX slides (native shapes/text/tables via pptxgenjs; same deck as the PDF) ----
-  pptxBg() { return this.resolveColor("var(--color-bg)", "161826"); }
-  async addPptxSlide(pptx, s) {
-    if (s.kind === "cover") return this.pptxCover(pptx, s, false);
-    if (s.kind === "divider") return this.pptxCover(pptx, s, true);
-    if (s.kind === "loop") return this.pptxLoop(pptx, s);
-    if (s.kind === "roadmap") {
-      const slide = pptx.addSlide(), canvas = this.roadmapCanvas(s);
-      slide.addImage({ data: canvas.toDataURL("image/png"), x: 0, y: 0, w: 13.333, h: 7.5 });
-    }
-    if (s.kind === "tooling") {
-      const slide = pptx.addSlide(), canvas = this.toolingCanvas(s);
-      slide.addImage({ data: canvas.toDataURL("image/png"), x: 0, y: 0, w: 13.333, h: 7.5 });
-    }
-    if (s.kind === "tool-roadmap") {
-      const slide = pptx.addSlide(), canvas = this.toolRoadmapCanvas(s);
-      slide.addImage({ data: canvas.toDataURL("image/png"), x: 0, y: 0, w: 13.333, h: 7.5 });
-    }
+  // ---- PPTX: the same ops as native shapes, text boxes and lines (icons are small PNGs) ----
+  // nearest PowerPoint preset dash for an [on, off] pattern drawn at line width w
+  pptxDash(dash, w) {
+    if (!dash) return "solid";
+    const r = dash[0] / dash[1];
+    if (r > 2 && dash[0] / w >= 5) return "lgDash";
+    const presets = [["sysDash", 3], ["dash", 4 / 3], ["sysDot", 1], ["dot", 1 / 3]];
+    return presets.reduce((a, b) => (Math.abs(Math.log(b[1] / r)) < Math.abs(Math.log(a[1] / r)) ? b : a))[0];
   }
-  pptxCover(pptx, s, isDivider) {
-    const slide = pptx.addSlide();
-    slide.background = { color: this.pptxBg() };
-    slide.addText(isDivider ? "SECTION" : "ENGINEERING PLATFORM", { x: 0.7, y: 2.55, w: 12, h: 0.4, fontSize: 12, color: this.resolveColor("var(--color-accent-300)"), fontFace: "Inter" });
-    slide.addText(isDivider ? s.title : "Delivery lifecycle & roadmap", { x: 0.7, y: 2.95, w: 12, h: 1.1, fontSize: 36, bold: true, color: this.resolveColor("var(--color-text)"), fontFace: "Inter" });
-    slide.addText(isDivider ? s.subtitle : s.rangeLabel, { x: 0.7, y: 4.05, w: 12, h: 0.5, fontSize: 16, color: this.resolveColor("var(--color-neutral-300)"), fontFace: "Inter" });
-  }
-  async pptxLoop(pptx, s) {
-    const slide = pptx.addSlide();
-    slide.background = { color: this.pptxBg() };
-    const canvas = await this.pdfLoopCanvas(s);
-    slide.addImage({ data: canvas.toDataURL("image/png"), x: 0, y: 0, w: 13.333, h: 7.5 });
-  }
-  pptxStage(pptx, s) {
-    const slide = pptx.addSlide();
-    slide.background = { color: this.pptxBg() };
-    const st2 = s.stage;
-    slide.addText([
-      { text: "STAGE 0" + (s.index + 1) + "  ", options: { color: this.resolveColor("var(--color-accent-300)"), fontSize: 12 } },
-      { text: st2.name, options: { bold: true, fontSize: 26, color: this.resolveColor("var(--color-text)") } }
-    ], { x: 0.6, y: 0.4, w: 10, h: 0.6, fontFace: "Inter" });
-    slide.addText(st2.readyLabel, { x: 10.1, y: 0.48, w: 2.6, h: 0.4, fontSize: 13, align: "right", color: this.resolveColor("var(--color-accent-300)"), fontFace: "Inter" });
-    const runs = [];
-    st2.caps.forEach(c => {
-      runs.push({ text: "\u25cf  ", options: { color: this.resolveColor(c.dotBg, "6a6e80"), fontSize: 14 } });
-      runs.push({ text: c.label, options: { color: this.resolveColor("var(--color-text)"), fontSize: 14, bold: true } });
-      runs.push({ text: c.tools.length ? "  (" + c.tools.map(t => t.name).join(", ") + ")" : "", options: { color: this.resolveColor("var(--color-neutral-300)"), fontSize: 12 } });
-      runs.push({ text: "   " + c.statusLabel, options: { color: this.resolveColor(c.statusFg), fontSize: 12, breakLine: true } });
-    });
-    slide.addText(runs, { x: 0.6, y: 1.3, w: 12.1, h: 4.4, valign: "top", fontFace: "Inter", lineSpacingMultiple: 1.35 });
-    if (st2.plan.length) {
-      slide.addText("HIGHLIGHTS", { x: 0.6, y: 5.9, w: 5, h: 0.3, fontSize: 11, color: this.resolveColor("var(--color-accent-300)"), fontFace: "Inter" });
-      slide.addText(st2.plan.map(p => "\u2022  " + p.text).join("\n"), { x: 0.6, y: 6.25, w: 12.1, h: 1, fontSize: 12, color: this.resolveColor("var(--color-text)"), fontFace: "Inter" });
+  iconImage(name, color) {
+    const cache = this._iconPngs || (this._iconPngs = {}), key = name + "|" + color;
+    if (!cache[key]) {
+      const canvas = document.createElement("canvas");
+      canvas.width = canvas.height = 96;
+      this.paintIcon(canvas.getContext("2d"), name, color, 0, 0, 96);
+      cache[key] = canvas.toDataURL("image/png");
     }
+    return cache[key];
   }
-  pptxRoadmap(pptx, s) {
-    const slide = pptx.addSlide();
-    slide.background = { color: this.pptxBg() };
-    const rs = s.stage, q = s.quarters, accent = this.resolveColor("var(--color-accent-300)"), txt = this.resolveColor("var(--color-text)"), surface = this.resolveColor("var(--color-surface)");
-    slide.addText(rs.name, { x: 0.6, y: 0.3, w: 10, h: 0.5, fontSize: 24, bold: true, color: txt, fontFace: "Inter" });
-    slide.addText(rs.summary, { x: 0.6, y: 0.8, w: 12, h: 0.35, fontSize: 12, color: this.resolveColor("var(--color-neutral-300)"), fontFace: "Inter" });
-
-    const headRow = [{ text: "Readiness", options: { bold: true, color: accent, fill: { color: surface } } }]
-      .concat(q.map(qh => ({ text: qh.label, options: { bold: true, color: accent, fill: { color: surface } } })));
-    const readyRow = [{ text: "", options: {} }].concat(rs.stageCells.map(c => ({ text: c.pct, options: { color: this.resolveColor(c.fg) } })));
-    const hlRow = [{ text: "Highlights", options: { bold: true, color: accent } }]
-      .concat(rs.hlCells.map(h => ({ text: h.lines.map(l => l.text).join("\n"), options: { fontSize: 9, color: txt } })));
-    const capRows = rs.caps.map(c => [{ text: c.label, options: { color: txt } }]
-      .concat(c.cells.map(cc => ({ text: cc.label, options: { fontSize: 9, color: this.resolveColor(cc.dotBg, "6a6e80") } }))));
-
-    slide.addTable([headRow, readyRow, hlRow].concat(capRows), {
-      x: 0.5, y: 1.3, w: 12.3, h: 5.6, fontSize: 10, fontFace: "Inter",
-      color: txt, fill: { color: this.pptxBg() },
-      border: { type: "solid", color: this.resolveColor("var(--color-divider)", "3f424d"), pt: 0.5 },
-      autoPage: false, valign: "top"
+  pptxSlide(pptx, ops) {
+    const slide = pptx.addSlide(), u = v => v / 120, pt = v => v * 0.6;
+    const line = (color, w, dash, alpha) => Object.assign({ color, width: pt(w), dashType: this.pptxDash(dash, w) }, alpha != null && alpha < 1 ? { transparency: Math.round((1 - alpha) * 100) } : {});
+    slide.background = { color: this._pal.bg };
+    ops.forEach(op => {
+      if (op.k === "rect") {
+        slide.addShape(op.r ? "roundRect" : "rect", {
+          x: u(op.x), y: u(op.y), w: u(op.w), h: u(op.h), rectRadius: op.r ? u(op.r) : undefined,
+          fill: op.fill ? { color: op.fill } : undefined, line: op.stroke ? line(op.stroke, op.sw || 1) : undefined
+        });
+      } else if (op.k === "chip") {
+        slide.addText(op.text, {
+          shape: "roundRect", x: u(op.x), y: u(op.y), w: u(op.w), h: u(op.h), rectRadius: u(op.r),
+          fill: op.fill ? { color: op.fill } : undefined, line: op.stroke ? line(op.stroke, 1) : undefined,
+          fontFace: "Inter", fontSize: pt(op.size), color: op.color, align: "center", valign: "middle", margin: 0, wrap: false
+        });
+      } else if (op.k === "bar") {
+        if (!op.color) return;
+        if (!op.dash) slide.addShape("roundRect", { x: u(op.x), y: u(op.y), w: u(op.w), h: u(op.h), rectRadius: u(op.h / 2), fill: { color: op.color } });
+        else slide.addShape("line", { x: u(op.x), y: u(op.y + op.h / 2), w: u(op.w), h: 0, line: line(op.color, op.h, op.dash) });
+      } else if (op.k === "line") {
+        slide.addShape("line", {
+          x: u(Math.min(op.x1, op.x2)), y: u(Math.min(op.y1, op.y2)), w: u(Math.abs(op.x2 - op.x1)), h: u(Math.abs(op.y2 - op.y1)),
+          flipV: (op.x2 - op.x1) * (op.y2 - op.y1) < 0, line: line(op.color, op.w, op.dash, op.alpha)
+        });
+      } else if (op.k === "path") {
+        const xs = op.pts.map(p => p[0]), ys = op.pts.map(p => p[1]);
+        const x = Math.min(...xs), y = Math.min(...ys);
+        slide.addShape("custGeom", {
+          x: u(x), y: u(y), w: u(Math.max(1, Math.max(...xs) - x)), h: u(Math.max(1, Math.max(...ys) - y)),
+          points: op.pts.map((p, i) => ({ x: u(p[0] - x), y: u(p[1] - y), moveTo: i === 0 })).concat(op.fill ? [{ close: true }] : []),
+          fill: op.fill ? { color: op.fill } : undefined, line: op.fill ? undefined : line(op.color, op.w, op.dash, op.alpha)
+        });
+      } else if (op.k === "circle" || op.k === "half") {
+        slide.addShape(op.k === "half" ? "pie" : "ellipse", {
+          x: u(op.cx - op.r), y: u(op.cy - op.r), w: u(op.r * 2), h: u(op.r * 2), angleRange: op.k === "half" ? [90, 270] : undefined,
+          fill: op.fill ? { color: op.fill } : undefined, line: op.stroke ? line(op.stroke, op.sw || 1) : undefined
+        });
+      } else if (op.k === "icon") {
+        slide.addImage({ data: this.iconImage(op.name, op.color), x: u(op.x), y: u(op.y), w: u(op.size), h: u(op.size) });
+      } else if (op.k === "text") {
+        const runs = op.paras.map((p, i) => ({
+          text: p.bullet || op.wrap ? p.text : p.lines.join(" "),
+          options: Object.assign({ breakLine: i < op.paras.length - 1 }, p.bullet ? { bullet: { indent: pt(op.size) } } : {})
+        }));
+        slide.addText(runs, Object.assign({
+          x: u(op.x), y: u(op.y), w: u(op.w), h: u(Math.max(op.h, op.lh)), margin: 0, valign: "top", align: op.align,
+          fontFace: "Inter", fontSize: pt(op.size), bold: op.weight >= 600, color: op.color,
+          lineSpacing: pt(op.lh), paraSpaceBefore: 0, paraSpaceAfter: 0, wrap: op.wrap
+        }, op.ls ? { charSpacing: pt(op.ls * op.size) } : {}));
+      }
     });
   }
 
@@ -2063,8 +2040,16 @@ class Component extends DCLogic {
       pulseRef: el => { if (el) { this.pulseEl = el; this.startPulse(); } },
       menuOpen: st.menuOpen, menuExpanded: st.menuOpen ? "true" : "false", menuIcon: st.menuOpen ? "ph-x" : "ph-list",
       toggleMenu: () => this.setState(s => ({ menuOpen: !s.menuOpen })),
-      exportPdf: this.exportPdf,
-      exportPptx: this.exportPptx,
+      exportRef: el => { this.exportEl = el; },
+      exportOpen: st.exportOpen, exportExpanded: st.exportOpen ? "true" : "false",
+      exportBusy: !!st.exporting, exportBusyAttr: st.exporting ? "true" : "false",
+      exportIcon: st.exporting ? "ph-circle-notch" : st.exportDone ? "ph-check-circle" : "ph-export",
+      exportLabel: st.exporting === "pdf" ? "Building PDF…" : st.exporting ? "Building PPTX…" : st.exportDone ? "Downloaded" : "Export",
+      exportMeta: m.stages.length + " stages · " + m.tools.filter(t => (t.caps || []).length).length + " tools · 16:9",
+      exportErr: st.exportErr || "", hasExportErr: !!st.exportErr,
+      toggleExport: () => { if (!st.exporting) this.setState(s => ({ exportOpen: !s.exportOpen, exportErr: "" })); },
+      exportPdfClick: () => this.runExport("pdf"),
+      exportPptxClick: () => this.runExport("pptx"),
       showLoop: !st.narrow,
       loopHint: st.narrow ? "" : " Click a stage on the loop for a bigger panel.",
       showCaps: st.caps, showCoverage: cov, showTools: st.tools,
