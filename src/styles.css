@@ -2348,15 +2348,84 @@ select.input option { background: var(--color-surface); color: var(--color-text)
 .c-nav-sticky { position:sticky; top:0; z-index:50; background:color-mix(in srgb, var(--color-bg) 82%, transparent); -webkit-backdrop-filter:blur(12px); backdrop-filter:blur(12px); border-bottom:1px solid var(--color-divider); }
 .nav-burger { display:none; }
 .nav-menu { display:none; }
+.c-export-actions { display:flex; position:absolute; z-index:49; top:72px; right:clamp(16px,3vw,48px); gap:8px; }
 
 @media (width <= 640px) {
   .nav-tabs { display:none; }
   .nav-burger { display:inline-flex; }
   .nav-menu { display:flex; flex-direction:column; gap:8px; position:absolute; left:0; right:0; top:100%; padding:12px 16px 16px; background:var(--color-bg); border-bottom:1px solid var(--color-divider); }
   .nav-menu .btn { justify-content:flex-start; }
+  .c-export-actions { top:64px; right:16px; }
 }
 
 @media (width <= 899px) {
   .c-layers-row { flex-direction:column; align-items:flex-start; }
   .c-layers-row .btn { width:100%; }
 }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   Export deck (PDF/PPTX) — a dedicated, off-screen set of fixed-size pages
+   built only while exporting. It never shows the live, scrolling app: each
+   .xp-slide is exactly one printed page / one slide, so pagination is exact.
+   ══════════════════════════════════════════════════════════════════════ */
+#export-root { display:none; }
+
+@page { size:13.333in 7.5in; margin:0; }
+
+.xp-slide {
+  box-sizing:border-box; width:13.333in; height:7.5in; position:relative; overflow:hidden;
+  padding:0.6in 0.7in; font-family:var(--font-body); break-after:page; page-break-after:always;
+}
+.xp-slide:last-child { break-after:auto; page-break-after:auto; }
+
+.xp-kicker { font-size:13px; text-transform:uppercase; letter-spacing:0.16em; color:var(--color-accent-300); }
+.xp-cover { position:absolute; left:0.7in; top:2.4in; right:0.7in; }
+.xp-cover-title { font-size:46px; margin:10px 0 8px; }
+.xp-cover-sub { font-size:17px; color:var(--color-neutral-300); margin:0 0 4px; }
+.xp-cover-date { font-size:13px; color:var(--color-neutral-400); margin:0; }
+
+.xp-slide-title { font-size:28px; margin:0 0 16px; }
+.xp-slide-subtitle { font-size:13px; color:var(--color-neutral-300); margin:-10px 0 16px; }
+
+.xp-loop-canvas { position:relative; width:100%; aspect-ratio:8 / 3; }
+.xp-loop-svg { display:block; width:100%; height:100%; overflow:visible; }
+.xp-loop-label { font:500 92px var(--font-heading); fill:#20233a; letter-spacing:-0.06em; }
+
+.xp-pill {
+  position:absolute; transform:translate(-50%, -50%); display:flex; flex-direction:column;
+  align-items:center; gap:4px; padding:6px 10px; border-radius:9px;
+  background:color-mix(in srgb, var(--color-bg) 78%, transparent); font-size:12px;
+}
+.xp-pill-icon { font-size:15px; color:var(--color-accent-300); }
+.xp-legend { display:flex; flex-wrap:wrap; gap:16px; margin-top:18px; font-size:12px; color:var(--color-neutral-100); }
+.xp-legend-item { display:flex; align-items:center; gap:7px; }
+.xp-legend-dot { width:11px; height:11px; border-radius:50%; border:1px solid; display:inline-block; }
+
+.xp-stage-head { display:flex; align-items:center; gap:12px; margin-bottom:20px; }
+.xp-stage-num { font-size:12px; color:var(--color-neutral-300); letter-spacing:0.12em; }
+.xp-stage-icon { font-size:26px; color:var(--color-accent-300); }
+.xp-ready { margin-left:auto; font-size:13px; color:var(--color-accent-300); }
+.xp-cap-list { display:flex; flex-direction:column; gap:10px; }
+.xp-cap-row { display:flex; align-items:center; gap:10px; font-size:14px; }
+.xp-cap-icon { font-size:17px; color:var(--color-accent-400); }
+.xp-cap-label { min-width:240px; }
+.xp-cap-tools { display:flex; flex-wrap:wrap; gap:5px; margin-left:auto; }
+.xp-chip { font-size:11px; padding:2px 8px; border-radius:6px; background:var(--color-accent-900); color:var(--color-accent-200); border:1px solid var(--color-accent-700); }
+.xp-cap-status { display:flex; align-items:center; gap:6px; font-size:12px; white-space:nowrap; }
+.xp-dot { width:10px; height:10px; border-radius:50%; border:1px solid; display:inline-block; }
+.xp-plan { margin-top:22px; padding-top:16px; border-top:1px solid var(--color-divider); }
+.xp-eyebrow { font-size:11px; text-transform:uppercase; letter-spacing:0.13em; color:var(--color-accent-300); }
+.xp-plan-line { font-size:13px; margin-top:6px; }
+
+.xp-q-row { display:grid; gap:8px; align-items:center; margin-bottom:10px; }
+.xp-q-row-label { font-size:11px; text-transform:uppercase; letter-spacing:0.1em; color:var(--color-accent-300); }
+.xp-q-head-label { font-size:11px; color:var(--color-neutral-300); }
+.xp-q-cell { display:flex; flex-direction:column; gap:4px; }
+.xp-q-label { font-size:11px; }
+.xp-q-bar { height:5px; border-radius:3px; }
+.xp-hl-row { align-items:start; }
+.xp-hl-cell { font-size:10.5px; line-height:1.35; }
+.xp-hl-line { margin-bottom:3px; }
+.xp-q-dot { width:9px; height:9px; border-radius:50%; border:1px solid; display:inline-block; }
+.xp-cap-timelines { display:flex; flex-direction:column; gap:10px; margin-top:6px; }
+.xp-cap-timeline-label { display:flex; align-items:center; gap:7px; font-size:12.5px; margin-bottom:5px; }
