@@ -5,7 +5,7 @@ Working notes for any agent (or human) picking this project up.
 ## What this is
 
 A single-page interactive mockup of our software delivery lifecycle: an infinity
-loop of eight DevOps stages, an editable model behind it, and a roadmap view.
+loop of eight DevOps stages, an editable model behind it, a roadmap view and a tool dependency graph.
 Built as one Design Component: **`src/index.html`**.
 
 Origin brief: recreate a classic DevOps infinity-loop diagram as vectors (loop
@@ -67,7 +67,7 @@ runs `tools/server.py`). No gzip/cache tuning; put a reverse proxy in front if n
 under `src/` changes the build id, so rebuild the image to ship it.
 
 Verifying a change: run `make lint` and `make check`, then open **both**
-`dist/standalone/…html` (via `file://`) and the served site, and click through all three
+`dist/standalone/…html` (via `file://`) and the served site, and click through all four
 tabs. Headless browsers
 work (`--screenshot`, `--virtual-time-budget`).
 
@@ -102,7 +102,7 @@ caveat in `THIRD-PARTY-NOTICES.md` first).
 `var(--*)` tokens. Dark ground `--color-bg`, one blurple accent used as line and glow, outlined buttons, no
 saturated floods. Icons are **Phosphor** (`@phosphor-icons/web@2.1.1`, `<i class="ph ph-…">`).
 
-## The three tabs
+## The four tabs
 
 1. **Lifecycle** — the loop. A Gerono lemniscate sampled in JS into 8 arc
    segments (`seg(i)` in the logic class, viewBox `0 0 1600 600`, `A/B/CX/CY`
@@ -119,10 +119,33 @@ saturated floods. Icons are **Phosphor** (`@phosphor-icons/web@2.1.1`, `<i class
    cell to edit, one bullet per line; the row sits on a tinted band, `c-hl-band`), then a
    sub-section per capability with one timeline row per tool. Each tool/quarter
    cell holds a free-text note per tool *and capability* (click to edit, one bullet per line); each line has a copy button to append it to the same tool's other capabilities ("Copy to X" / "Copy to all").
-3. **Editor** (styled with the neutral ramp so it reads as a tool tab) — the
+3. **Ecosystem** — tool dependency graph. `ecoGraph(m)` (module level) builds nodes and
+   edges from `tool.deps` (A → B: A depends on B; dangling ids, self-links and duplicates are
+   ignored), the tier per tool from its number of distinct linked tools (0 Not linked, 1 Satellite,
+   Central if ≥3 and either ≥60% of the max or a blast radius ≥40% of all tools, else Integrated) and the blast radius (transitive dependents).
+   Layout is a small force simulation (`ecoStep`: repulsion, springs — short and dotted to
+   satellites — and a pull to the centre that is strongest for central tools), viewBox
+   `0 0 1000 620`. Live view: `ecoLive()` keeps positions across renders and model edits and
+   re-heats on change; `ecoTick` runs it per animation frame; `ecoDown` drags a node (a drag
+   never counts as a click). Zoom/pan is view state only (`state.ecoView` = `{k, tx, ty}`,
+   k 1–4, clamped to the map): mouse wheel (non-passive listener on the SVG) zooms around the
+   cursor, the background rect pans, buttons zoom/reset. `ecoProject()` scales positions but not
+   radii or label sizes, so zooming spreads the graph out; export ignores the zoom. Reduced motion settles instantly. Names are HTML labels over the
+   SVG (interpolated text does not render inside SVG `<text>`). Side panel: overview, or the
+   selected tool's stats and its Depends on / Used by links (view-only, clicking one selects
+   it; a button jumps to the Editor). Ranking table below. The tab never edits the model. Filter (`state.ecoLayer`, `ECO_LAYERS`): Central / Central + Integrated / All; `ecoFilter()`
+   keeps the tiers up to that level and the links between them (tiers and numbers are always
+   computed on the whole graph). The simulation re-heats from the current positions, so
+   switching animates; export always shows all tools. `ecoGeom()` turns positions into curved edges + arrowheads for both views; each link tries
+   a few bends (both sides, three depths; two-way pairs keep opposite sides) and keeps the one
+   farthest from other tools and labels. `ecoStep` also pushes tools off links they are not
+   part of and resolves overlaps between tool+label boxes, so names never sit on each other.
+   Links between two Central tools (the backbone) are drawn lighter and thicker (accent-300) on
+   the site and in the export.
+4. **Editor** (styled with the neutral ramp so it reads as a tool tab) — the
    model editor: timeline range, stages & capabilities, tools table (each
-   tool→capability assignment has a free-text Note field, stored as `remark`),
-   Save/Load JSON. Highlights are edited on the Roadmap tab, not here.
+   tool→capability assignment has a free-text Note field, stored as `remark`; each tool
+   row has a "Depends on" column editing `deps`), Save/Load JSON. Highlights are edited on the Roadmap tab, not here.
 
 ## Export (PDF / PPTX)
 
@@ -130,7 +153,9 @@ saturated floods. Icons are **Phosphor** (`@phosphor-icons/web@2.1.1`, `<i class
 (`rect`, `chip`, `bar`, `line`, `path`, `circle`, `half`, `icon`, `text`) in 1600×900 slide
 units (120 per inch), using a fixed snapshot from `exportData()` (all layers on, no focus,
 end quarter; the lifecycle slide uses the same view with the Coverage layer off, so it shows
-only stages, capabilities and tools). `pptxSlide()` turns each op into a native pptxgenjs shape or text box (the loop
+only stages, capabilities and tools). `ecoSlide()` (third slide) draws the dependency graph,
+using the live layout when it matches the model, else `ecoSettle()` of a fresh one, plus the tools
+by tier. `pptxSlide()` turns each op into a native pptxgenjs shape or text box (the loop
 uses `custGeom` paths, a `path` with `fill` is a closed shape such as the loop's direction
 arrows; icons are cached Phosphor PNGs). `paintSlide()` draws the same ops on a
 1.5× canvas for each jsPDF page. Text is pre-wrapped with real Inter metrics (`wrapText`), so
@@ -140,7 +165,7 @@ as ops, never as a separate PDF or PPTX code path.
 
 ## Data model
 
-Held in component state, `schema: 6`. Persistence: over http(s) with `/api/model`
+Held in component state, `schema: 7`. Persistence: over http(s) with `/api/model`
 present it is stored **server-side per browser** (cookie `cid`, debounced PUT, no
 localStorage); on `file://` or without the API it falls back to `localStorage` key
 **`devops-loop-model-v3`**.
@@ -156,13 +181,14 @@ that never edits keeps getting the seed.
 
 ```js
 {
-  schema: 4,
+  schema: 7,
   range: { sq: 4, sy: 2026, eq: 4, ey: 2027 },   // start/end quarter+year
   stages: [                                       // exactly 8, names+icons fixed
     { name, icon, caps: [{ id, label, icon }], highlights: { "2027-Q1": "line\nline" } }
   ],
   tools: [
     { id, name,
+      deps: ["t3", "t7"],                             // ids of the tools this one depends on
       caps: [{ id: capId, cov: "c"|"p"|"n"|"x",           // one entry per assigned capability
                startQ: "2027-Q1"|null, endQ: "2027-Q3"|null,
                remark: "free text",                   // optional, Editor "Note" column
@@ -193,7 +219,12 @@ Rules that matter:
 - **Range changes are non-destructive**: out-of-range dates and highlights are
   kept in the model and simply hidden (selects show "—").
 
-Save JSON writes `{ format: "devops-loop", version: 6, model }`; Load accepts
+- **Dependencies** live in `tool.deps`, global per tool, deliberately not per capability (one
+  link per pair of tools; if capability-specific impact is ever needed, add an optional scope
+  list per dependency rather than moving deps onto assignments). v6 → v7 migration adds `[]`. Removing a tool also
+  removes it from every other tool's `deps`. Tiers, counts and blast radius are derived.
+
+Save JSON writes `{ format: "devops-loop", version: 7, model }`; Load accepts
 that wrapper or a bare model, validates the shape, migrates, then saves.
 
 ## Conventions to keep
@@ -231,5 +262,8 @@ that wrapper or a bare model, validates the shape, migrates, then saves.
 
 ## Placeholders to replace with real data
 
-Tool names, capability lists and highlight text are sample content. "Reset to
+Tool names, capability lists and highlight text are sample content. The sample tools are real,
+common tools; their dependencies come from `SEED_DEPS` (keyed by tool name, each line commented
+with the publicly documented integration behind it) and are only applied by the seed / "Reset to
+sample". "Reset to
 sample" regenerates them from the `SEED` table in the logic class.
