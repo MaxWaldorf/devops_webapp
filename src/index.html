@@ -105,7 +105,7 @@
       <span class="u-font-size-11px u-upper u-color-accent-300 c-letter-spacing-12em_margin-right-4px">Layers</span>
       <sc-for list="{{toggles}}" as="tg" hint-placeholder-count="3">
         <button type="button" class="btn u-gap-8px" style="background:{{tg.bg}};border:1px solid {{tg.bd}};color:{{tg.fg}}" sc-camel-on-click="{{tg.onClick}}">
-          <span class="u-grid u-place-center c-width-14px_height-14px_border-radius-4px" style="background:{{tg.dot}}"><i class="ph ph-check" style="opacity:{{tg.tick}}"></i></span>
+          <span class="u-grid u-place-center c-width-14px_height-14px_border-radius-4px" style="background:{{tg.dot}};border-color:{{tg.bd}}"><i class="ph ph-check" style="opacity:{{tg.tick}}"></i></span>
           {{tg.label}}
         </button>
       </sc-for>
@@ -365,14 +365,14 @@
     <div class="u-flex u-col u-gap-12px">
       <div class="u-flex u-gap-10px u-wrap c-align-items-baseline">
         <h2 class="c-font-size-20px_margin-0">Tools</h2>
-        <span class="u-font-size-12px u-color-neutral-300">a tool can face several capabilities — each with its own coverage state and dates</span>
+        <span class="u-font-size-12px u-color-neutral-300">a tool can face several capabilities — each with its own coverage state and dates · dependencies feed the Ecosystem tab</span>
       </div>
       <div class="c-overflow-x-auto_padding-bottom-4px">
         <div class="u-flex u-col u-gap-8px c-min-width-1270px">
           <div class="u-grid u-gap-10px u-upper u-color-accent-300 c-ed-head">
             <span>Tool</span>
             <div class="u-grid u-gap-10px c-ed-assign"><span>Core capability</span><span>Coverage state (current)</span><span>Start quarter</span><span>End quarter</span><span>Note</span><span></span></div>
-            <span>Check</span><span></span>
+            <span>Depends on</span><span>Check</span><span></span>
           </div>
           <sc-for list="{{edTools}}" as="tt" hint-placeholder-count="6">
             <div class="u-grid u-gap-10px u-align-items-start u-border-radius-8px c-ed-row" style="background:{{tt.rowBg}}">
@@ -404,6 +404,19 @@
                   <option value="">+ assign a capability…</option>
                   <sc-for list="{{capOptions}}" as="co" hint-placeholder-count="8">
                     <option value="{{co.v}}">{{co.n}}</option>
+                  </sc-for>
+                </sc-raw-select>
+              </div>
+              <div class="u-flex u-col u-gap-6px">
+                <div class="u-flex u-wrap c-gap-4px">
+                  <sc-for list="{{tt.deps}}" as="dp" hint-placeholder-count="2">
+                    <span class="u-flex u-items-center u-gap-6px u-font-size-11-5px c-padding-2px-4px-2px-8p_border-radius-6px_background-color">{{dp.name}}<button aria-label="Remove dependency" type="button" class="btn btn-icon c-width-18px_height-18px_font-size-10px" title="Remove dependency" sc-camel-on-click="{{dp.remove}}"><i class="ph ph-x"></i></button></span>
+                  </sc-for>
+                </div>
+                <sc-raw-select class="input u-font-size-12px c-padding-4px-6px_max-width-260px" value="" sc-camel-on-change="{{tt.addDep}}">
+                  <option value="">+ depends on…</option>
+                  <sc-for list="{{tt.depOptions}}" as="dop" hint-placeholder-count="6">
+                    <option value="{{dop.v}}">{{dop.n}}</option>
                   </sc-for>
                 </sc-raw-select>
               </div>
@@ -615,6 +628,148 @@
     </sc-if>
   </div>
   </sc-if>
+
+  <sc-if value="{{isEcosystem}}">
+  <div class="u-flex u-col c-padding-8px-clamp-16px_gap-26px">
+    <div class="u-flex u-wrap c-gap-18px_align-items-flex-end_justify-content-space">
+      <div class="c-max-width-720px">
+        <h1 class="c-font-size-36px_margin-0-0-8px">Tool ecosystem</h1>
+        <p class="c-margin-0_font-size-14-5px_color-neutral-20">How our tools depend on each other. The graph arranges itself: the most connected tools gather in the middle, satellites cluster around the tool they hang off. Drag tools to untangle it; select one to see what it depends on and what depends on it. Dependencies are entered in the Editor.</p>
+      </div>
+    </div>
+
+    <div class="c-eco-layout">
+      <div class="c-eco-map">
+        <div class="c-eco-canvas">
+        <svg class="c-eco-svg" ref="{{ecoSvgRef}}" sc-camel-view-box="0 0 1000 620" role="img" aria-label="Tool dependency map">
+          <rect class="{{ecoPanCls}}" x="0" y="0" width="1000" height="620" fill="transparent" sc-camel-on-pointer-down="{{ecoPanDown}}"></rect>
+          <sc-for list="{{ecoEdges}}" as="ed" hint-placeholder-count="12">
+            <g opacity="{{ed.op}}">
+              <path d="{{ed.d}}" fill="none" stroke="{{ed.stroke}}" stroke-width="{{ed.w}}" stroke-dasharray="{{ed.dash}}" stroke-linecap="round"></path>
+              <path d="{{ed.head}}" fill="{{ed.stroke}}"></path>
+            </g>
+          </sc-for>
+          <sc-for list="{{ecoNodes}}" as="nd" hint-placeholder-count="12">
+            <g class="c-eco-node" opacity="{{nd.op}}" sc-camel-on-pointer-down="{{nd.onDown}}" sc-camel-on-click="{{nd.onSelect}}">
+              <circle cx="{{nd.x}}" cy="{{nd.y}}" r="{{nd.haloR}}" fill="none" stroke="var(--color-accent-400)" stroke-width="2" opacity="{{nd.haloOp}}"></circle>
+              <circle cx="{{nd.x}}" cy="{{nd.y}}" r="{{nd.r}}" fill="{{nd.fill}}" stroke="{{nd.stroke}}" stroke-width="{{nd.sw}}" stroke-dasharray="{{nd.dash}}"></circle>
+            </g>
+          </sc-for>
+        </svg>
+        <sc-for list="{{ecoNodes}}" as="nd" hint-placeholder-count="12">
+          <span class="c-eco-label" style="left:{{nd.lxp}}%;top:{{nd.lyp}}%;font-size:clamp(9px, {{nd.fsq}}cqw, {{nd.fs}}px);font-weight:{{nd.fw}};color:{{nd.fg}};opacity:{{nd.op}}">{{nd.name}}</span>
+        </sc-for>
+        </div>
+        <div class="c-eco-legend">
+          <sc-for list="{{ecoTiers}}" as="et" hint-placeholder-count="4">
+            <span class="u-flex u-items-center u-gap-7px"><span class="u-round u-no-shrink c-width-11px_height-11px" style="background:{{et.fill}};border:1.5px solid {{et.stroke}}"></span>{{et.label}}</span>
+          </sc-for>
+          <span class="u-flex u-items-center u-gap-7px c-eco-legend-sep"><span class="c-eco-ln"></span>depends on</span>
+          <span class="u-flex u-items-center u-gap-7px"><span class="c-eco-ln c-eco-ln-core"></span>between central tools</span>
+          <span class="u-flex u-items-center u-gap-7px"><span class="c-eco-ln c-eco-ln-dot"></span>link to a satellite</span>
+        </div>
+        <sc-if value="{{ecoEmpty}}">
+          <div class="c-eco-empty">No dependencies yet. Select a tool and add what it depends on.</div>
+        </sc-if>
+        <div class="c-eco-key"><span class="c-eco-key-arrow"><i class="ph ph-arrow-right"></i></span><span>A → B: A depends on B · node size grows with the number of tools using it · drag a tool to move it · scroll to zoom, drag the background to pan</span>
+          <span class="c-eco-zoom">
+            <button type="button" class="btn btn-icon c-eco-zoom-btn" aria-label="Zoom out" title="Zoom out" sc-camel-on-click="{{ecoZoomOut}}"><i class="ph ph-minus"></i></button>
+            <span class="c-eco-zoom-val">{{ecoZoomLabel}}</span>
+            <button type="button" class="btn btn-icon c-eco-zoom-btn" aria-label="Zoom in" title="Zoom in" sc-camel-on-click="{{ecoZoomIn}}"><i class="ph ph-plus"></i></button>
+            <button type="button" class="btn btn-icon c-eco-zoom-btn" aria-label="Reset zoom" title="Reset zoom" sc-camel-on-click="{{ecoZoomReset}}"><i class="ph ph-arrows-in"></i></button>
+          </span>
+        </div>
+      </div>
+
+      <aside class="c-eco-panel">
+        <sc-if value="{{ecoNoSel}}">
+          <span class="u-upper u-color-accent-300 c-font-400-10px-1-font-b_letter-spacing-14em">Overview</span>
+          <span class="c-font-500-17px-1-font-h">{{ecoSummary}}</span>
+          <div class="u-flex u-col u-gap-9px">
+            <sc-for list="{{ecoTiers}}" as="et" hint-placeholder-count="4">
+              <div class="u-flex u-items-center u-gap-9px">
+                <span class="u-round u-no-shrink c-width-11px_height-11px" style="background:{{et.fill}};border:1.5px solid {{et.stroke}}"></span>
+                <span class="u-font-size-14px">{{et.label}}</span>
+                <span class="u-font-size-12px u-color-neutral-300">{{et.note}}</span>
+                <span class="u-margin-left-auto c-font-500-17px-1-font-h">{{et.count}}</span>
+              </div>
+            </sc-for>
+          </div>
+          <p class="u-font-size-12px u-color-neutral-300 c-eco-hint">Click a tool on the map or in the table below to inspect it. Dependencies are entered per tool in the Editor tab.</p>
+        </sc-if>
+
+        <sc-if value="{{ecoSel}}">
+          <div class="u-flex u-items-center u-gap-10px">
+            <span class="u-border-radius-8px u-grid u-place-center u-color-accent-300 c-width-30px_height-30px_font-size-17px"><i class="ph ph-wrench"></i></span>
+            <div class="u-flex u-col c-gap-4px">
+              <span class="c-font-500-20px-1-font-h">{{ecoSel.name}}</span>
+              <span class="u-flex u-items-center u-gap-7px"><span class="tag {{ecoSel.tagCls}}">{{ecoSel.tier}}</span><span class="u-font-size-11-5px u-color-neutral-300">{{ecoSel.tierNote}}</span></span>
+            </div>
+            <button type="button" class="btn btn-icon u-margin-left-auto u-border-1px-solid-color-divider u-font-size-16px" sc-camel-on-click="{{ecoSel.close}}" aria-label="Close tool details"><i class="ph ph-x"></i></button>
+          </div>
+
+          <div class="c-eco-stats">
+            <div class="c-eco-stat"><span class="c-eco-stat-n">{{ecoSel.usedBy}}</span><span class="c-eco-stat-l">used by</span></div>
+            <div class="c-eco-stat"><span class="c-eco-stat-n">{{ecoSel.dependsOn}}</span><span class="c-eco-stat-l">depends on</span></div>
+            <div class="c-eco-stat" title="Tools affected, directly or indirectly, if this one is unavailable"><span class="c-eco-stat-n">{{ecoSel.reach}}</span><span class="c-eco-stat-l">blast radius</span></div>
+          </div>
+
+          <div class="u-flex u-col u-gap-7px">
+            <span class="u-upper u-color-accent-300 c-font-400-10px-1-font-b_letter-spacing-14em">Stages served</span>
+            <div class="u-flex u-wrap u-gap-5px">
+              <sc-for list="{{ecoSel.stages}}" as="sg" hint-placeholder-count="2">
+                <span class="tag tag-neutral">{{sg.name}}</span>
+              </sc-for>
+              <sc-if value="{{ecoSel.noStages}}"><span class="u-font-size-12px u-color-neutral-300">No capability assigned</span></sc-if>
+            </div>
+          </div>
+
+          <div class="u-flex u-col u-gap-7px">
+            <span class="u-upper u-color-accent-300 c-font-400-10px-1-font-b_letter-spacing-14em">Depends on</span>
+            <div class="u-flex u-wrap u-gap-5px">
+              <sc-for list="{{ecoSel.deps}}" as="dp" hint-placeholder-count="2">
+                <button type="button" class="btn c-eco-chip" title="Show {{dp.name}}" sc-camel-on-click="{{dp.select}}">{{dp.name}}</button>
+              </sc-for>
+              <sc-if value="{{ecoSel.noDeps}}"><span class="u-font-size-12px u-color-neutral-300">Nothing yet</span></sc-if>
+            </div>
+          </div>
+
+          <div class="u-flex u-col u-gap-7px">
+            <span class="u-upper u-color-accent-300 c-font-400-10px-1-font-b_letter-spacing-14em">Used by</span>
+            <div class="u-flex u-wrap u-gap-5px">
+              <sc-for list="{{ecoSel.users}}" as="us" hint-placeholder-count="2">
+                <button type="button" class="btn c-eco-chip" title="Show {{us.name}}" sc-camel-on-click="{{us.select}}">{{us.name}}</button>
+              </sc-for>
+              <sc-if value="{{ecoSel.noUsers}}"><span class="u-font-size-12px u-color-neutral-300">No tool depends on it</span></sc-if>
+            </div>
+          </div>
+
+          <button type="button" class="btn btn-secondary u-border-1px-solid-color-divider u-gap-7px c-eco-edit-btn" sc-camel-on-click="{{ecoSel.toEditor}}"><i class="ph ph-pencil-simple"></i>Edit dependencies in the Editor</button>
+        </sc-if>
+      </aside>
+    </div>
+
+    <div class="u-flex u-col u-gap-12px">
+      <div class="u-flex u-gap-10px u-wrap c-align-items-baseline">
+        <h2 class="c-font-size-20px_margin-0">Ranking</h2>
+        <span class="u-font-size-12px u-color-neutral-300">most central first · blast radius = tools affected, directly or indirectly, if this one is unavailable</span>
+      </div>
+      <div class="c-overflow-x-auto_padding-bottom-4px">
+        <div class="u-flex u-col c-eco-table">
+          <div class="c-eco-row c-eco-head"><span>Tool</span><span>Tier</span><span>Used by</span><span>Depends on</span><span>Blast radius</span><span>Stages</span></div>
+          <sc-for list="{{ecoRows}}" as="er" hint-placeholder-count="8">
+            <button type="button" class="btn c-eco-row c-eco-row-btn" data-on="{{er.on}}" sc-camel-on-click="{{er.onSelect}}">
+              <span class="c-eco-cell-name">{{er.name}}</span>
+              <span><span class="tag {{er.tagCls}}">{{er.tier}}</span></span>
+              <span>{{er.usedBy}}</span><span>{{er.dependsOn}}</span><span>{{er.reach}}</span>
+              <span class="c-eco-cell-muted">{{er.stages}}</span>
+            </button>
+          </sc-for>
+        </div>
+      </div>
+    </div>
+  </div>
+  </sc-if>
 </div>
 </x-dc>
 <script type="text/x-dc" data-dc-script="" data-props="{&quot;autoCycle&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Motion&quot;},&quot;cycleSeconds&quot;:{&quot;editor&quot;:&quot;range&quot;,&quot;default&quot;:3,&quot;min&quot;:1.5,&quot;max&quot;:8,&quot;step&quot;:0.5,&quot;unit&quot;:&quot;s&quot;,&quot;tsType&quot;:&quot;number&quot;,&quot;section&quot;:&quot;Motion&quot;},&quot;flowPulse&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Motion&quot;}}">
@@ -651,7 +806,14 @@ function qIndex(r, key) {
   return (+mm[1] - r.sy) * 4 + (+mm[2] - r.sq);
 }
 function migrate(m) {
-  if (!m || m.schema === 6) return m;
+  if (!m || m.schema === 7) return m;
+  if (m.schema !== 6) migrateV6(m);
+  // v6 -> v7: each tool lists the tools it depends on
+  (m.tools || []).forEach(t => { if (!Array.isArray(t.deps)) t.deps = []; });
+  m.schema = 7;
+  return m;
+}
+function migrateV6(m) {
   if (m.schema !== 4 && m.schema !== 5) migrateV4(m);
   if (m.schema === 4) {
     // v4 -> v5: coverage state and dates move from the tool onto each assigned capability
@@ -668,7 +830,6 @@ function migrate(m) {
     delete t.notes;
   });
   m.schema = 6;
-  return m;
 }
 function migrateV4(m) {
   const r = m.range || DEFAULT_RANGE;
@@ -718,18 +879,19 @@ const SEED = [
   ["Code", "ph-code", [
     ["ph-git-branch", "Source control & branching", "cccccc", ["GitHub"]],
     ["ph-git-pull-request", "Peer review", "pccccc", ["GitHub"]],
-    ["ph-key", "Secrets handling", "nppccc", ["pre-commit"]],
-    ["ph-brackets-curly", "Standards & linting", "nppccc", ["VS Code", "pre-commit"]]]],
+    ["ph-key", "Secrets handling", "nppccc", ["Gitleaks", "GitHub Advanced Security"]],
+    ["ph-brackets-curly", "Standards & linting", "nppccc", ["VS Code", "pre-commit"]],
+    ["ph-robot", "AI coding assistants & agents", "pppccc", ["GitHub Copilot", "Claude Code"]]]],
   ["Build", "ph-hammer", [
     ["ph-arrows-clockwise", "CI pipelines", "cccccc", ["GitHub Actions"]],
-    ["ph-package", "Artifact packaging", "pccccc", ["Docker", "Nexus"]],
-    ["ph-tree-structure", "Dependency management", "nppccc", ["Nexus"]],
+    ["ph-package", "Artifact packaging", "pccccc", ["Docker", "Nexus", "Artifactory"]],
+    ["ph-tree-structure", "Dependency management", "nppccc", ["Nexus", "Artifactory", "Renovate"]],
     ["ph-lightning", "Build cache & speed", "nnnppc", ["GitHub Actions"]]]],
   ["Test", "ph-test-tube", [
-    ["ph-check-circle", "Unit & integration automation", "npppcc", ["Playwright"]],
-    ["ph-shield-warning", "SAST / DAST scanning", "nppccc", []],
-    ["ph-gauge", "Performance & load", "nnnppp", []],
-    ["ph-flask", "Test data & environments", "nnppcc", ["Manual QA"]]]],
+    ["ph-check-circle", "Unit & integration automation", "npppcc", ["Playwright", "Testcontainers"]],
+    ["ph-shield-warning", "SAST / DAST scanning", "nppccc", ["GitHub Advanced Security", "Checkmarx", "SonarQube", "Trivy", "Checkov", "OWASP ZAP"]],
+    ["ph-gauge", "Performance & load", "nnnppp", ["k6"]],
+    ["ph-flask", "Test data & environments", "nnppcc", ["Testcontainers"]]]],
   ["Release", "ph-rocket-launch", [
     ["ph-tag", "Versioning & changelogs", "pccccc", ["GitHub Releases"]],
     ["ph-seal-check", "Approvals & change management", "ppcccc", ["ServiceNow"]],
@@ -737,20 +899,54 @@ const SEED = [
     ["ph-arrows-left-right", "Environment promotion", "nppccc", ["ServiceNow"]]]],
   ["Deploy", "ph-cloud-arrow-up", [
     ["ph-stack", "IaC provisioning", "pccccc", ["Terraform"]],
-    ["ph-broadcast", "Progressive delivery", "nnppcc", ["Argo CD"]],
-    ["ph-sliders", "Config & secrets per env", "nppccc", ["Ansible"]],
+    ["ph-broadcast", "Progressive delivery", "nnppcc", ["Argo Rollouts"]],
+    ["ph-sliders", "Config & secrets per env", "nppccc", ["Ansible", "Vault"]],
     ["ph-arrow-counter-clockwise", "Rollback", "npcccc", ["Argo CD"]]]],
   ["Operate", "ph-gear-six", [
-    ["ph-siren", "Incident response & on-call", "npcccc", ["Email + phone"]],
+    ["ph-siren", "Incident response & on-call", "npcccc", ["PagerDuty"]],
     ["ph-book-open-text", "Runbooks & automation", "npppcc", ["Confluence"]],
     ["ph-coins", "Capacity & cost", "nnnppp", []],
-    ["ph-hard-drives", "Backup & DR", "xxxxxx", ["Infra team"]]]],
+    ["ph-hard-drives", "Backup & DR", "xxxxxx", ["Velero"]]]],
   ["Monitor", "ph-pulse", [
-    ["ph-chart-line", "Metrics & dashboards", "ppcccc", ["Grafana"]],
-    ["ph-list-magnifying-glass", "Centralised logging", "nppccc", []],
-    ["ph-path", "Tracing & APM", "nnppcc", []],
-    ["ph-bell-ringing", "SLOs & alerting", "nnnpcc", ["Host checks"]]]]
+    ["ph-chart-line", "Metrics & dashboards", "ppcccc", ["Grafana", "Prometheus"]],
+    ["ph-list-magnifying-glass", "Centralised logging", "nppccc", ["Loki"]],
+    ["ph-path", "Tracing & APM", "nnppcc", ["Tempo"]],
+    ["ph-bell-ringing", "SLOs & alerting", "nnnpcc", ["Prometheus"]]]]
 ];
+
+// sample dependencies: tool -> the tools it depends on (by name). Each link is an integration
+// the vendors document publicly; the comment names it.
+const SEED_DEPS = {
+  "GitHub": ["Jira", "Confluence"],                        // at scale, work is planned in Jira (issue keys in branches/PRs) and specified in Confluence
+  "Jira": ["GitHub"],                                      // GitHub for Atlassian app: branches, PRs and builds in the Jira development panel
+  "Confluence": ["Jira"],                                  // Jira issues macro, native Atlassian link
+  "Miro": ["Jira"],                                        // Miro Jira Cards integration
+  "VS Code": ["GitHub"],                                   // GitHub Pull Requests extension, GitHub sign-in
+  "pre-commit": ["GitHub", "Gitleaks", "Checkov"],         // hooks fetched from git repos; gitleaks and checkov ship pre-commit hooks
+  "GitHub Copilot": ["GitHub", "GitHub Actions"],          // Copilot coding agent works on GitHub issues/PRs in a GitHub Actions environment
+  "Claude Code": ["GitHub", "GitHub Actions", "Jira", "Confluence"], // Claude GitHub app + claude-code-action; Atlassian remote MCP server
+  "GitHub Advanced Security": ["GitHub", "GitHub Actions"], // code/secret scanning on GitHub repos; CodeQL runs on Actions
+  "Trivy": ["GitHub Actions", "GitHub Advanced Security"], // aquasecurity/trivy-action; SARIF upload to code scanning
+  "Checkmarx": ["GitHub", "GitHub Actions"],               // Checkmarx One GitHub integration (PR decoration); checkmarx/ast-github-action
+  "Checkov": ["GitHub Actions", "GitHub Advanced Security"], // bridgecrewio/checkov-action; SARIF upload to code scanning
+  "GitHub Actions": ["GitHub", "Docker", "Nexus", "Artifactory", "Vault", "ServiceNow"], // repo events; docker/build-push-action; package publish (setup-jfrog-cli); hashicorp/vault-action; DevOps Change gate
+  "Docker": ["Nexus", "Artifactory"],                      // private Docker registries / Docker Hub proxies
+  "Renovate": ["GitHub", "Nexus", "Artifactory"],          // runs as a GitHub app; private registry lookups
+  "Playwright": ["GitHub Actions"],                        // Playwright "Setting up CI" generates a GitHub Actions workflow
+  "Testcontainers": ["Docker"],                            // needs a Docker-compatible runtime
+  "SonarQube": ["GitHub", "GitHub Actions"],               // PR decoration via GitHub app; scan action in CI
+  "OWASP ZAP": ["GitHub Actions"],                         // zaproxy baseline/full-scan actions
+  "k6": ["GitHub Actions", "Prometheus"],                  // grafana/run-k6-action; Prometheus remote-write output
+  "GitHub Releases": ["GitHub", "GitHub Actions"],         // releases of a repo, created from workflows
+  "ServiceNow": ["Jira", "GitHub Actions"],                // ServiceNow DevOps tool integrations (Jira, GitHub Actions)
+  "Terraform": ["GitHub", "GitHub Actions", "Artifactory", "Vault"], // git module sources; setup-terraform; Artifactory Terraform registry; Vault provider
+  "Ansible": ["GitHub", "Vault"],                          // playbooks/collections from git; community.hashi_vault
+  "Argo CD": ["GitHub", "Artifactory", "Vault"],           // git as source of truth; Helm/OCI chart repo; argocd-vault-plugin
+  "Argo Rollouts": ["Prometheus"],                         // AnalysisTemplates query Prometheus metrics
+  "Grafana": ["Prometheus", "Loki", "Tempo", "PagerDuty"], // data sources; alerting contact point
+  "Prometheus": ["PagerDuty"],                             // Alertmanager PagerDuty receiver
+  "PagerDuty": ["ServiceNow"]                              // PagerDuty <-> ServiceNow incident sync
+};
 
 function sigOf(code) {
   const first = t => { const i = code.indexOf(t); return i < 0 ? null : i; };
@@ -785,6 +981,7 @@ function seedModel() {
     stages.push({ name: s[0], icon: s[1], caps, highlights: {} });
   });
   const tools = Array.from(groups.values());
+  tools.forEach(t => { t.deps = (SEED_DEPS[t.name] || []).map(n => (groups.get(n) || {}).id).filter(Boolean); });
   const nameOf = id => { for (const s of stages) { const c = s.caps.find(c => c.id === id); if (c) return c.label; } return ""; };
   stages.forEach(s => {
     const ids = s.caps.map(c => c.id);
@@ -800,7 +997,7 @@ function seedModel() {
       if (lines.length) s.highlights[key] = lines.join("\n");
     });
   });
-  return { schema: 6, stages, tools, range: Object.assign({}, DEFAULT_RANGE) };
+  return { schema: 7, stages, tools, range: Object.assign({}, DEFAULT_RANGE) };
 }
 
 function validModel(m) {
@@ -808,6 +1005,175 @@ function validModel(m) {
   m.stages.forEach(s => { if (!s.highlights) s.highlights = {}; });
   if (!m.range) m.range = Object.assign({}, DEFAULT_RANGE);
   return migrate(m);
+}
+
+// ---- tool ecosystem: tool.deps lists the ids of the tools it depends on (A -> B: A needs B).
+// A tool's tier comes from how many distinct tools it is linked to (either direction); the map
+// is a force layout: central tools end up in the middle, satellites around what they link to ----
+const ECO_W = 1000, ECO_H = 620, ECO_CX = 500, ECO_CY = 300;
+const TIERS = [
+  { label: "Central", note: "3+ links, and the most linked or relied on by 40%+ of tools", tag: "tag-accent", fill: "var(--color-accent-700)", stroke: "var(--color-accent-300)", fg: "var(--color-accent-100)" },
+  { label: "Connected", note: "2+ links", tag: "tag-outline", fill: "var(--color-accent-900)", stroke: "var(--color-accent-500)", fg: "var(--color-text)" },
+  { label: "Satellite", note: "a single link", tag: "tag-neutral", fill: "var(--color-bg)", stroke: "var(--color-accent-600)", fg: "var(--color-neutral-100)" },
+  { label: "Isolated", note: "no links yet", tag: "tag-neutral c-eco-tag-dim", fill: "var(--color-bg)", stroke: "#5b5f70", fg: "var(--color-neutral-300)" }
+];
+function ecoGraph(m) {
+  const tools = (m.tools || []).filter(t => t && t.id);
+  const ids = new Set(tools.map(t => t.id)), seen = new Set(), edges = [];
+  tools.forEach(t => (Array.isArray(t.deps) ? t.deps : []).forEach(d => {
+    const k = t.id + ">" + d;
+    if (ids.has(d) && d !== t.id && !seen.has(k)) { seen.add(k); edges.push({ from: t.id, to: d }); }
+  }));
+  const byId = new Map(tools.map(t => [t.id, { id: t.id, name: String(t.name || "").trim() || "untitled", tool: t, deps: [], users: [], links: new Set() }]));
+  edges.forEach(e => {
+    const a = byId.get(e.from), b = byId.get(e.to);
+    a.deps.push(e.to); b.users.push(e.from); a.links.add(e.to); b.links.add(e.from);
+  });
+  // blast radius: every tool that depends on this one, directly or through other tools
+  const reach = id => {
+    const out = new Set(), q = [id];
+    while (q.length) byId.get(q.shift()).users.forEach(u => { if (u !== id && !out.has(u)) { out.add(u); q.push(u); } });
+    return out.size;
+  };
+  const maxDeg = Math.max(0, ...Array.from(byId.values(), n => n.links.size));
+  const nodes = Array.from(byId.values(), n => {
+    const deg = n.links.size;
+    // central: 3+ links and either close to the most linked tool or relied on by 40%+ of all tools
+    const rc = reach(n.id), hub = deg >= 3 && (deg >= Math.ceil(maxDeg * 0.6) || rc >= 0.4 * byId.size);
+    const tier = deg === 0 ? 3 : deg === 1 ? 2 : hub ? 0 : 1;
+    return Object.assign(n, { deg, tier, reach: rc, r: 9 + 4 * Math.sqrt(n.users.length) });
+  });
+  nodes.sort((a, b) => a.tier - b.tier || b.deg - a.deg || b.reach - a.reach || a.name.localeCompare(b.name));
+
+  // seed positions on a spiral, most central first, so the simulation starts from a sensible
+  // shape and every layout is deterministic
+  nodes.forEach((n, k) => {
+    const a = k * 2.39996, r = 30 + 26 * Math.sqrt(k);
+    n.x = ECO_CX + r * 1.5 * Math.cos(a);
+    n.y = ECO_CY + r * Math.sin(a);
+    n.vx = 0; n.vy = 0; n.fx = null; n.fy = null;
+  });
+  edges.forEach(e => { e.sat = byId.get(e.from).deg === 1 || byId.get(e.to).deg === 1; });
+  const sig = tools.map(t => t.id + ":" + edges.filter(e => e.from === t.id).map(e => e.to).join(",")).join("|");
+  return { nodes, edges, byId, sig };
+}
+
+// one tick of the force layout: nodes repel, links act as springs (short to satellites, longer
+// between connected tools), central tools are pulled hardest towards the middle
+function ecoStep(g, alpha) {
+  const ns = g.nodes;
+  for (let i = 0; i < ns.length; i++) for (let j = i + 1; j < ns.length; j++) {
+    const a = ns[i], b = ns[j];
+    let dx = b.x - a.x, dy = b.y - a.y;
+    if (!dx && !dy) { dx = (i - j) * 0.1; dy = 0.1; }
+    const d2 = Math.max(dx * dx + dy * dy, 64);
+    if (d2 > 160000) continue;
+    const f = 600 * alpha / d2;
+    a.vx -= dx * f; a.vy -= dy * f; b.vx += dx * f; b.vy += dy * f;
+  }
+  g.edges.forEach(e => {
+    const a = g.byId.get(e.from), b = g.byId.get(e.to);
+    const dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy) || 1;
+    const k = (d - (e.sat ? 90 : 160)) / d * alpha * (e.sat ? 0.5 : 0.25) / 2;
+    a.vx += dx * k; a.vy += dy * k; b.vx -= dx * k; b.vy -= dy * k;
+  });
+  // keep tools (and the label under them) off links they are not part of: find the closest
+  // point of the drawn curve and push the tool away from it
+  g.edges.forEach(e => {
+    const a = g.byId.get(e.from), b = g.byId.get(e.to);
+    const L = Math.hypot(b.x - a.x, b.y - a.y) || 1, ux = (b.x - a.x) / L, uy = (b.y - a.y) / L, bend = Math.min(40, L * 0.15);
+    const cx = (a.x + b.x) / 2 - uy * bend, cy = (a.y + b.y) / 2 + ux * bend;
+    ns.forEach(n => {
+      if (n === a || n === b) return;
+      [[n.x, n.y, n.r + 16], [n.x, n.y + n.r + 11, 11]].forEach(([qx, qy, clear]) => {
+        if (qx < Math.min(a.x, b.x, cx) - clear || qx > Math.max(a.x, b.x, cx) + clear || qy < Math.min(a.y, b.y, cy) - clear || qy > Math.max(a.y, b.y, cy) + clear) return;
+        let best = Infinity, px = 0, py = 0;
+        for (let i = 1; i < 12; i++) {
+          const t = i / 12, s = 1 - t;
+          const x = s * s * a.x + 2 * s * t * cx + t * t * b.x, y = s * s * a.y + 2 * s * t * cy + t * t * b.y;
+          const d = Math.hypot(qx - x, qy - y);
+          if (d < best) { best = d; px = x; py = y; }
+        }
+        if (best >= clear) return;
+        let dx = qx - px, dy = qy - py;
+        if (best < 0.5) { dx = -uy; dy = ux; best = 1; }
+        const k = (clear - best) / best * Math.max(alpha, 0.05) * 0.6;
+        n.vx += dx * k; n.vy += dy * k;
+        a.vx -= dx * k * 0.1; a.vy -= dy * k * 0.1; b.vx -= dx * k * 0.1; b.vy -= dy * k * 0.1;
+      });
+    });
+  });
+  ns.forEach(n => {
+    const pull = [0.07, 0.04, 0.025, 0.04][n.tier] * alpha;
+    n.vx += (ECO_CX - n.x) * pull; n.vy += (ECO_CY - n.y) * pull * 1.6;
+    if (n.fx != null) { n.x = n.fx; n.y = n.fy; n.vx = 0; n.vy = 0; return; }
+    n.vx *= 0.6; n.vy *= 0.6;
+    n.x = Math.min(ECO_W - 60, Math.max(60, n.x + n.vx));
+    n.y = Math.min(ECO_H - 50, Math.max(30, n.y + n.vy));
+    // the top-right corner is the legend's (with room for a label): move out by the shorter way
+    const lx = ECO_W - 245, ly = 225;
+    if (n.x > lx && n.y < ly) { if (n.x - lx < ly - n.y) n.x = lx; else n.y = ly; }
+  });
+  // no overlaps: each tool plus its label is a box; overlapping boxes are pushed apart the short way
+  const box = n => {
+    const w = Math.max(2 * n.r, n.name.length * (n.tier === 0 ? 8.4 : 7.2)) + 14;
+    return { w, h: 2 * n.r + 30, cy: n.y + 9 };
+  };
+  for (let i = 0; i < ns.length; i++) for (let j = i + 1; j < ns.length; j++) {
+    const a = ns[i], b = ns[j], ba = box(a), bb = box(b);
+    const ox = (ba.w + bb.w) / 2 - Math.abs(b.x - a.x), oy = (ba.h + bb.h) / 2 - Math.abs(bb.cy - ba.cy);
+    if (ox <= 0 || oy <= 0) continue;
+    const ma = a.fx != null ? 0 : b.fx != null ? 1 : 0.5, mb = 1 - ma;
+    if (ox < oy) { const sx = b.x >= a.x ? 1 : -1; a.x -= sx * ox * ma * 0.5; b.x += sx * ox * mb * 0.5; }
+    else { const sy = bb.cy >= ba.cy ? 1 : -1; a.y -= sy * oy * ma * 0.5; b.y += sy * oy * mb * 0.5; }
+  }
+}
+function ecoSettle(g) {
+  for (let alpha = 1; alpha > 0.005; alpha *= 0.975) ecoStep(g, alpha);
+  return g;
+}
+// the zoomed view: positions scale and shift, circles and labels keep their size, so zooming
+// in spreads a busy graph out instead of just magnifying it
+function ecoProject(g, v) {
+  const nodes = g.nodes.map(n => Object.assign({}, n, { x: n.x * v.k + v.tx, y: n.y * v.k + v.ty }));
+  return Object.assign({}, g, { nodes, byId: new Map(nodes.map(n => [n.id, n])), edges: g.edges.map(e => Object.assign({}, e)) });
+}
+// edges: a curve sampled as points, plus an arrowhead. Each link picks its bend (side and depth)
+// to stay clear of the other tools and their labels; a two-way pair keeps opposite sides
+function ecoGeom(g) {
+  const pairs = new Set(g.edges.map(e => e.from + ">" + e.to));
+  g.edges.forEach(e => {
+    const a = g.byId.get(e.from), b = g.byId.get(e.to);
+    const L = Math.hypot(b.x - a.x, b.y - a.y) || 1, ux = (b.x - a.x) / L, uy = (b.y - a.y) / L;
+    const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2, base = Math.min(40, L * 0.15);
+    const options = pairs.has(e.to + ">" + e.from) ? [1, 2, 3] : [1, -1, 0, 2, -2, 3, -3];
+    let bend = base, bestScore = -Infinity;
+    options.forEach((o, rank) => {
+      const bd = base * o, cx = mx - uy * bd, cy = my + ux * bd;
+      let clear = 40;
+      g.nodes.forEach(n => {
+        if (n === a || n === b) return;
+        for (let i = 2; i < 15; i++) {
+          const t = i / 16, s = 1 - t;
+          const x = s * s * a.x + 2 * s * t * cx + t * t * b.x, y = s * s * a.y + 2 * s * t * cy + t * t * b.y;
+          if (Math.abs(x - n.x) > 60 || Math.abs(y - n.y) > 60) continue;
+          clear = Math.min(clear, Math.hypot(x - n.x, y - n.y) - n.r - 4, Math.hypot(x - n.x, y - n.y - n.r - 11) - 10);
+        }
+      });
+      const score = Math.min(clear, 14) - rank * 0.6;
+      if (score > bestScore) { bestScore = score; bend = bd; }
+    });
+    const p0 = [a.x + ux * a.r, a.y + uy * a.r], p2 = [b.x - ux * (b.r + 4), b.y - uy * (b.r + 4)];
+    const c = [(a.x + b.x) / 2 - uy * bend, (a.y + b.y) / 2 + ux * bend];
+    e.pts = [];
+    for (let i = 0; i <= 16; i++) {
+      const t = i / 16, s = 1 - t;
+      e.pts.push([s * s * p0[0] + 2 * s * t * c[0] + t * t * p2[0], s * s * p0[1] + 2 * s * t * c[1] + t * t * p2[1]]);
+    }
+    const tl = Math.hypot(p2[0] - c[0], p2[1] - c[1]) || 1, tx = (p2[0] - c[0]) / tl, ty = (p2[1] - c[1]) / tl;
+    e.head = [p2, [p2[0] - tx * 11 - ty * 5, p2[1] - ty * 11 + tx * 5], [p2[0] - tx * 7, p2[1] - ty * 7], [p2[0] - tx * 11 + ty * 5, p2[1] - ty * 11 - tx * 5]];
+  });
+  return g;
 }
 
 // Served over http(s) with the /api/model endpoint present, the model lives on the
@@ -920,7 +1286,98 @@ class Component extends DCLogic {
     clearTimeout(this.flashT);
     clearTimeout(this.putT);
     if (this.pulseAnim) this.pulseAnim.cancel();
+    if (this.ecoRaf) cancelAnimationFrame(this.ecoRaf);
     this.detach();
+  }
+
+  // ---- live force layout for the Ecosystem tab: positions survive re-renders and model edits;
+  // the simulation re-heats when the graph changes or a tool is dragged ----
+  ecoLive(g) {
+    const sim = this.ecoSim || (this.ecoSim = { sig: null, pos: new Map(), alpha: 0 });
+    if (sim.sig !== g.sig) {
+      const fresh = !sim.sig;
+      g.nodes.forEach(n => {
+        const p = sim.pos.get(n.id);
+        if (p) { n.x = p.x; n.y = p.y; n.fx = p.fx; n.fy = p.fy; return; }
+        // a newly linked or added tool starts next to a tool it is linked to
+        const nb = Array.from(n.links, id => sim.pos.get(id)).find(Boolean);
+        if (!fresh && nb) { n.x = nb.x + 18; n.y = nb.y + 18; }
+      });
+      sim.sig = g.sig;
+      sim.alpha = fresh ? 1 : Math.max(sim.alpha, 0.45);
+      if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+        for (; sim.alpha > 0.005; sim.alpha *= 0.975) ecoStep(g, sim.alpha);
+      }
+    } else {
+      g.nodes.forEach(n => {
+        const p = sim.pos.get(n.id);
+        if (p) Object.assign(n, { x: p.x, y: p.y, vx: p.vx, vy: p.vy, fx: p.fx, fy: p.fy });
+      });
+    }
+    sim.g = g;
+    sim.pos = new Map(g.nodes.map(n => [n.id, n]));
+    if (sim.alpha > 0.005 && !this.ecoRaf) this.ecoRaf = requestAnimationFrame(this.ecoTick);
+    return g;
+  }
+  ecoTick = () => {
+    this.ecoRaf = null;
+    const sim = this.ecoSim;
+    if (!sim || !sim.g || this.state.tab !== "ecosystem") return;
+    for (let k = 0; k < 2; k++) { ecoStep(sim.g, sim.alpha); sim.alpha *= 0.985; }
+    if (this.ecoDrag) sim.alpha = Math.max(sim.alpha, 0.15);
+    this.setState(s => ({ ecoTick: (s.ecoTick || 0) + 1 }));
+  };
+  ecoClamp(v) {
+    return { k: v.k, tx: Math.min(0, Math.max(ECO_W - ECO_W * v.k, v.tx)), ty: Math.min(0, Math.max(ECO_H - ECO_H * v.k, v.ty)) };
+  }
+  // zoom by factor f around a point of the map (viewBox units); centre when none is given
+  ecoZoomBy(f, vx, vy) {
+    const v = this.state.ecoView || { k: 1, tx: 0, ty: 0 };
+    const k = Math.min(4, Math.max(1, v.k * f));
+    if (vx == null) { vx = ECO_W / 2; vy = ECO_H / 2; }
+    this.setState({ ecoView: this.ecoClamp({ k, tx: vx - (vx - v.tx) * k / v.k, ty: vy - (vy - v.ty) * k / v.k }) });
+  }
+  ecoWheel = e => {
+    if (!this.ecoSvg) return;
+    e.preventDefault();
+    const r = this.ecoSvg.getBoundingClientRect();
+    this.ecoZoomBy(Math.exp(-e.deltaY * 0.0015), (e.clientX - r.left) * ECO_W / r.width, (e.clientY - r.top) * ECO_H / r.height);
+  };
+  // drag the empty background to pan a zoomed map
+  ecoPanDown(e) {
+    const v0 = this.state.ecoView;
+    if (!this.ecoSvg || e.button > 0 || !v0 || v0.k === 1) return;
+    const r = this.ecoSvg.getBoundingClientRect(), x0 = e.clientX, y0 = e.clientY;
+    const move = ev => this.setState({ ecoView: this.ecoClamp({ k: v0.k, tx: v0.tx + (ev.clientX - x0) * ECO_W / r.width, ty: v0.ty + (ev.clientY - y0) * ECO_H / r.height }) });
+    const up = () => { window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", up); };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+  }
+  ecoDown(id, e) {
+    const svg = this.ecoSvg, sim = this.ecoSim;
+    if (!svg || !sim || e.button > 0) return;
+    const r = svg.getBoundingClientRect(), x0 = e.clientX, y0 = e.clientY;
+    this.ecoMoved = false;
+    this.ecoDrag = id;
+    const move = ev => {
+      if (!this.ecoMoved && Math.hypot(ev.clientX - x0, ev.clientY - y0) < 4) return;
+      this.ecoMoved = true;
+      const n = this.ecoSim.pos.get(id), v = this.state.ecoView || { k: 1, tx: 0, ty: 0 };
+      if (!n) return;
+      n.fx = Math.min(ECO_W - 20, Math.max(20, ((ev.clientX - r.left) * ECO_W / r.width - v.tx) / v.k));
+      n.fy = Math.min(ECO_H - 20, Math.max(20, ((ev.clientY - r.top) * ECO_H / r.height - v.ty) / v.k));
+      this.ecoSim.alpha = Math.max(this.ecoSim.alpha, 0.3);
+      if (!this.ecoRaf) this.ecoRaf = requestAnimationFrame(this.ecoTick);
+    };
+    const up = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+      this.ecoDrag = null;
+      const n = this.ecoSim.pos.get(id);
+      if (n) { n.fx = null; n.fy = null; }
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
   }
 
   detach() {
@@ -1100,7 +1557,7 @@ class Component extends DCLogic {
     const date = new Date().toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" });
     const range = this.state.model.range || DEFAULT_RANGE;
     const span = "From " + qName(range, 0) + " To " + qName(range, quarters.length - 1);
-    const deck = [this.coverSlide("Engineering Platform", "Delivery lifecycle & roadmap", span, date, d.fullD), this.loopSlide(d.loop)];
+    const deck = [this.coverSlide("Engineering Platform", "Delivery lifecycle & roadmap", span, date, d.fullD), this.loopSlide(d.loop), this.ecoSlide()];
     deck.push(this.coverSlide("Section", "SDLC Roadmap", span));
     d.rmStages.forEach(rs => deck.push(...this.gridSlides({
       title: rs.name, icon: rs.icon, summary: rs.summary, quarters, head: "Stage readiness",
@@ -1198,6 +1655,45 @@ class Component extends DCLogic {
     }));
     ops.push(...this.loopArrows(loop, cards, T([800, 300])));
     cards.forEach(c => ops.push(...this.shiftOps(c.ops, c.y)));
+    return ops;
+  }
+
+  // tool ecosystem: the dependency map on the left, tools by tier on the right
+  ecoSlide() {
+    const fresh = ecoGraph(this.state.model), live = this.ecoSim && this.ecoSim.g;
+    const P = this._pal, ops = [], M = 48, g = ecoGeom(live && live.sig === fresh.sig ? live : ecoSettle(fresh));
+    ops.push(this.textOp(M, 34, 1100, "Tool ecosystem", { size: 40, weight: 600, lh: 48 }));
+    ops.push(this.textOp(M, 86, 1100, g.nodes.length + " tools · " + g.edges.length + " dependencies · arrows point from a tool to what it depends on", { size: 16, color: P.n300 }));
+    const s = Math.min(1040 / ECO_W, 720 / ECO_H), ox = M, oy = 150, T = p => [ox + p[0] * s, oy + p[1] * s];
+    const core = e => g.byId.get(e.from).tier === 0 && g.byId.get(e.to).tier === 0;
+    g.edges.slice().sort((a, b) => core(a) - core(b)).forEach(e => {
+      const c = core(e);
+      ops.push({ k: "path", pts: e.pts.map(T), color: c ? P.a300 : e.sat ? P.a500 : P.a700, w: c ? 2.4 : e.sat ? 2 : 1.6, dash: e.sat ? [1, 6] : null });
+      ops.push({ k: "path", pts: e.head.map(T), fill: c ? P.a300 : P.a600 });
+    });
+    g.nodes.forEach(n => {
+      const t = TIERS[n.tier], c = T([n.x, n.y]), r = n.r * s, size = (n.tier === 0 ? 15 : 13) * s;
+      ops.push({ k: "circle", cx: c[0], cy: c[1], r, fill: this.hex(t.fill), stroke: this.hex(t.stroke), sw: 2 });
+      ops.push(this.textOp(c[0] - 100, c[1] + r + 3, 200, n.name, { size, weight: n.tier === 0 ? 600 : 400, align: "center", color: this.hex(t.fg) }));
+    });
+    // right column: one block per tier, most central first
+    const x = 1130, w = 1600 - M - x, bottom = 870;
+    let y = 150;
+    TIERS.forEach((t, i) => {
+      const list = g.nodes.filter(n => n.tier === i);
+      if (!list.length || y > bottom - 40) return;
+      ops.push({ k: "circle", cx: x + 6, cy: y + 7, r: 6, fill: this.hex(t.fill), stroke: this.hex(t.stroke), sw: 1.5 });
+      ops.push(this.textOp(x + 20, y, w - 20, t.label.toUpperCase() + " · " + list.length, { size: 11.5, color: P.a300, ls: 0.13 }));
+      y += 26;
+      for (let k = 0; k < list.length; k++) {
+        if (y > bottom - 22) { ops.push(this.textOp(x + 20, y, w - 20, "+" + (list.length - k) + " more", { size: 13, color: P.n400 })); y += 22; break; }
+        const n = list[k];
+        ops.push(this.textOp(x + 20, y, w - 150, n.name, { size: 14 }));
+        ops.push(this.textOp(x + w - 130, y, 130, "used by " + n.users.length + " · needs " + n.deps.length, { size: 12, color: P.n300, align: "right" }));
+        y += 22;
+      }
+      y += 14;
+    });
     return ops;
   }
 
@@ -1845,6 +2341,16 @@ class Component extends DCLogic {
             remove: () => this.edit(mm => { mm.tools[ti].caps.splice(k, 1); })
           };
         }),
+        deps: (t.deps || []).map(id => m.tools.find(o => o.id === id)).filter(Boolean).map(o => ({
+          name: o.name || "untitled",
+          remove: () => this.edit(mm => { mm.tools[ti].deps = (mm.tools[ti].deps || []).filter(d => d !== o.id); })
+        })),
+        depOptions: m.tools.filter(o => o.id !== t.id && (t.deps || []).indexOf(o.id) < 0)
+          .map(o => ({ v: o.id, n: o.name || "untitled" })).sort((a, b) => a.n.localeCompare(b.n)),
+        addDep: e => {
+          const v = e.target.value;
+          if (v) this.edit(mm => { const x = mm.tools[ti]; x.deps = (x.deps || []).concat([v]); });
+        },
         setName: e => { const v = e.target.value; this.edit(mm => { mm.tools[ti].name = v; }); },
         addCap: e => {
           const v = e.target.value;
@@ -1854,7 +2360,11 @@ class Component extends DCLogic {
             if (!cs.some(a => a.id === v)) cs.push({ id: v, cov: "n", startQ: null, endQ: null, notes: {} });
           });
         },
-        remove: () => this.edit(mm => { mm.tools.splice(ti, 1); })
+        remove: () => this.edit(mm => {
+          const id = mm.tools[ti].id;
+          mm.tools.splice(ti, 1);
+          mm.tools.forEach(o => { o.deps = (o.deps || []).filter(d => d !== id); });
+        })
       };
     });
 
@@ -2022,12 +2532,85 @@ class Component extends DCLogic {
       };
     });
 
+    // ---- ecosystem: tool dependency map, ranking and the selected tool's links ----
+    const eco = { ecoNodes: [], ecoEdges: [], ecoRows: [], ecoTiers: [], ecoSel: null };
+    if (st.tab === "ecosystem") {
+      const eg = ecoGeom(ecoProject(this.ecoLive(ecoGraph(m)), st.ecoView || { k: 1, tx: 0, ty: 0 }));
+      const selId = st.ecoSel && eg.byId.has(st.ecoSel) ? st.ecoSel : null;
+      const fid = selId;
+      const fn = fid ? eg.byId.get(fid) : null;
+      const pick = id => this.setState({ ecoSel: id === selId ? null : id });
+      const stagesOf = t => m.stages.filter(s2 => s2.caps.some(c => (t.caps || []).some(a => a.id === c.id))).map(s2 => s2.name);
+      const pathD = pts => "M" + pts.map(p => p[0].toFixed(1) + " " + p[1].toFixed(1)).join(" L");
+      eco.ecoEdges = eg.edges.map(e => {
+        const inc = !!fn && (e.from === fid || e.to === fid), out = inc && e.from === fid;
+        // links between two central tools stand out: the backbone of the ecosystem
+        const core = eg.byId.get(e.from).tier === 0 && eg.byId.get(e.to).tier === 0;
+        const stroke = inc ? (out ? "var(--color-accent-200)" : "var(--color-accent-400)") : core ? "var(--color-accent-300)" : "var(--color-accent-700)";
+        return {
+          inc, d: pathD(e.pts), head: pathD(e.head) + " Z", stroke,
+          w: e.sat ? (inc ? 2.6 : 2) : (inc || core ? 2.4 : 1.5), dash: e.sat ? "0.5 6" : "none",
+          op: !fn ? 0.85 : inc ? 1 : 0.1
+        };
+      }).sort((a, b) => a.inc - b.inc || (a.stroke === "var(--color-accent-300)") - (b.stroke === "var(--color-accent-300)"));
+      eco.ecoNodes = eg.nodes.map(n => {
+        const T = TIERS[n.tier], on = n.id === fid, lit = !fn || on || fn.links.has(n.id);
+        return {
+          x: n.x, y: n.y, r: n.r, haloR: n.r + 7, haloOp: on ? 0.5 : 0,
+          fill: T.fill, stroke: on ? "var(--color-accent-200)" : T.stroke, sw: on ? 3 : 2, dash: n.tier === 3 ? "3 4" : "none",
+          op: lit ? 1 : 0.22, name: n.name, lxp: n.x / ECO_W * 100, lyp: (n.y + n.r + 3) / ECO_H * 100, fs: n.tier === 0 ? 15 : 13, fsq: (n.tier === 0 ? 15 : 13) / 10, fw: n.tier === 0 ? 600 : 400, fg: T.fg,
+          onDown: e => this.ecoDown(n.id, e),
+          onSelect: () => { if (this.ecoMoved) { this.ecoMoved = false; return; } pick(n.id); }
+        };
+      });
+      eco.ecoRows = eg.nodes.map(n => ({
+        name: n.name, tier: TIERS[n.tier].label, tagCls: TIERS[n.tier].tag,
+        usedBy: n.users.length, dependsOn: n.deps.length, reach: n.reach,
+        stages: stagesOf(n.tool).join(", ") || "—",
+        on: n.id === selId ? "true" : "false",
+        onSelect: () => pick(n.id)
+      }));
+      eco.ecoTiers = TIERS.map((T, i) => ({
+        label: T.label, note: T.note, fill: T.fill, stroke: T.stroke,
+        count: eg.nodes.filter(n => n.tier === i).length
+      }));
+      eco.ecoSummary = eg.nodes.length + " tools · " + eg.edges.length + (eg.edges.length === 1 ? " dependency" : " dependencies");
+      eco.ecoEmpty = eg.nodes.length > 0 && eg.edges.length === 0;
+      const sn = selId ? eg.byId.get(selId) : null;
+      if (sn) {
+        const link = id => ({ name: eg.byId.get(id).name, select: () => this.setState({ ecoSel: id }) });
+        const T = TIERS[sn.tier];
+        eco.ecoSel = {
+          name: sn.name, tier: T.label, tierNote: T.note, tagCls: T.tag,
+          usedBy: sn.users.length, dependsOn: sn.deps.length, reach: sn.reach,
+          stages: stagesOf(sn.tool).map(name => ({ name })),
+          noStages: stagesOf(sn.tool).length === 0,
+          deps: sn.deps.map(link), users: sn.users.map(link),
+          noDeps: sn.deps.length === 0, noUsers: sn.users.length === 0,
+          toEditor: () => { this.setState({ tab: "editor", selected: null, hover: null, menuOpen: false }); window.scrollTo(0, 0); },
+          close: () => this.setState({ ecoSel: null })
+        };
+      }
+    }
+
     const capCount = m.stages.reduce((a, s) => a + s.caps.length, 0);
     const frac = st.tPos / (QUARTERS.length - 1);
 
-    return {
-      isLoop: st.tab === "loop", isEditor: st.tab === "editor", isRoadmap: st.tab === "roadmap",
-      tabs: [tab("loop", "Lifecycle", "ph-infinity"), tab("roadmap", "Roadmap", "ph-flag-banner"), tab("editor", "Editor", "ph-table", "neutral")],
+    return Object.assign(eco, {
+      isLoop: st.tab === "loop", isEditor: st.tab === "editor", isRoadmap: st.tab === "roadmap", isEcosystem: st.tab === "ecosystem",
+      ecoNoSel: !eco.ecoSel,
+      ecoSvgRef: el => {
+        if (this.ecoSvg && this.ecoSvg !== el) this.ecoSvg.removeEventListener("wheel", this.ecoWheel);
+        if (el && el !== this.ecoSvg) el.addEventListener("wheel", this.ecoWheel, { passive: false });
+        this.ecoSvg = el;
+      },
+      ecoPanDown: e => this.ecoPanDown(e),
+      ecoZoomIn: () => this.ecoZoomBy(1.4),
+      ecoZoomOut: () => this.ecoZoomBy(1 / 1.4),
+      ecoZoomReset: () => this.setState({ ecoView: null }),
+      ecoZoomLabel: Math.round(((st.ecoView || {}).k || 1) * 100) + "%",
+      ecoPanCls: st.ecoView && st.ecoView.k > 1 ? "c-eco-bg c-eco-bg-pan" : "c-eco-bg",
+      tabs: [tab("loop", "Lifecycle", "ph-infinity"), tab("roadmap", "Roadmap", "ph-flag-banner"), tab("ecosystem", "Ecosystem", "ph-share-network"), tab("editor", "Editor", "ph-table", "neutral")],
       isSdlcRoadmap: st.roadmapView === "sdlc",
       isToolsRoadmap: st.roadmapView === "tools",
       roadmapModes: [roadmapMode("sdlc", "SDLC roadmap", "ph-path"), roadmapMode("tools", "Tools roadmap", "ph-wrench")],
@@ -2093,7 +2676,7 @@ class Component extends DCLogic {
       rangeLabel: "Today is " + qName(range, 0) + " · roadmap runs to " + qName(range, QUARTERS.length - 1),
       addTool: () => this.edit(mm => {
         const ids = mm.tools.map(t => +String(t.id).replace(/\D/g, "")).concat([0]);
-        mm.tools.push({ id: "t" + (Math.max.apply(null, ids) + 1), name: "", caps: [] });
+        mm.tools.push({ id: "t" + (Math.max.apply(null, ids) + 1), name: "", caps: [], deps: [] });
       }),
       confirmReset: !!st.confirmReset,
       askReset: () => this.setState({ confirmReset: true }),
@@ -2104,7 +2687,7 @@ class Component extends DCLogic {
       fileRef: el => { if (el) this.fileEl = el; },
       openFile: () => { if (this.fileEl) this.fileEl.click(); },
       saveFile: () => {
-        const blob = new Blob([JSON.stringify({ format: "devops-loop", version: 6, model: m }, null, 2)], { type: "application/json" });
+        const blob = new Blob([JSON.stringify({ format: "devops-loop", version: 7, model: m }, null, 2)], { type: "application/json" });
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
         a.href = url;
@@ -2136,7 +2719,7 @@ class Component extends DCLogic {
         reader.onerror = () => this.flash("Could not read that file", true);
         reader.readAsText(file);
       }
-    };
+    });
   }
 }
 </script>
