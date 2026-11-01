@@ -638,6 +638,15 @@
       </div>
     </div>
 
+    <div class="u-flex u-wrap u-items-center c-gap-14px">
+      <div class="u-flex c-roadmap-switch" role="tablist" aria-label="Tools shown">
+        <sc-for list="{{ecoLayers}}" as="el" hint-placeholder-count="3">
+          <button type="button" role="tab" aria-selected="{{el.selected}}" class="btn c-roadmap-switch-btn" style="background:{{el.bg}};border-color:{{el.bd}};color:{{el.fg}}" sc-camel-on-click="{{el.onClick}}"><i class="ph {{el.icon}}"></i>{{el.label}}</button>
+        </sc-for>
+      </div>
+      <span class="u-font-size-12px u-color-neutral-300">{{ecoShown}}</span>
+    </div>
+
     <div class="c-eco-layout">
       <div class="c-eco-map">
         <div class="c-eco-canvas">
@@ -1013,9 +1022,15 @@ function validModel(m) {
 const ECO_W = 1000, ECO_H = 620, ECO_CX = 500, ECO_CY = 300;
 const TIERS = [
   { label: "Central", note: "3+ links, and the most linked or relied on by 40%+ of tools", tag: "tag-accent", fill: "var(--color-accent-700)", stroke: "var(--color-accent-300)", fg: "var(--color-accent-100)" },
-  { label: "Connected", note: "2+ links", tag: "tag-outline", fill: "var(--color-accent-900)", stroke: "var(--color-accent-500)", fg: "var(--color-text)" },
+  { label: "Integrated", note: "2+ links", tag: "tag-outline", fill: "var(--color-accent-900)", stroke: "var(--color-accent-500)", fg: "var(--color-text)" },
   { label: "Satellite", note: "a single link", tag: "tag-neutral", fill: "var(--color-bg)", stroke: "var(--color-accent-600)", fg: "var(--color-neutral-100)" },
-  { label: "Isolated", note: "no links yet", tag: "tag-neutral c-eco-tag-dim", fill: "var(--color-bg)", stroke: "#5b5f70", fg: "var(--color-neutral-300)" }
+  { label: "Not linked", note: "no dependencies yet", tag: "tag-neutral c-eco-tag-dim", fill: "var(--color-bg)", stroke: "#5b5f70", fg: "var(--color-neutral-300)" }
+];
+// filter levels of the Ecosystem tab: each shows tiers up to maxTier
+const ECO_LAYERS = [
+  { id: "central", label: "Central", icon: "ph-circle", maxTier: 0 },
+  { id: "integrated", label: "Central + Integrated", icon: "ph-circles-three", maxTier: 1 },
+  { id: "all", label: "All tools", icon: "ph-graph", maxTier: 3 }
 ];
 function ecoGraph(m) {
   const tools = (m.tools || []).filter(t => t && t.id);
@@ -1074,7 +1089,7 @@ function ecoStep(g, alpha) {
   g.edges.forEach(e => {
     const a = g.byId.get(e.from), b = g.byId.get(e.to);
     const dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy) || 1;
-    const k = (d - (e.sat ? 90 : 160)) / d * alpha * (e.sat ? 0.5 : 0.25) / 2;
+    const k = (d - (e.sat ? 90 : 160) * (g.nodes.length < 15 ? 1.6 : 1)) / d * alpha * (e.sat ? 0.5 : 0.25) / 2;
     a.vx += dx * k; a.vy += dy * k; b.vx -= dx * k; b.vy -= dy * k;
   });
   // keep tools (and the label under them) off links they are not part of: find the closest
@@ -1104,7 +1119,8 @@ function ecoStep(g, alpha) {
     });
   });
   ns.forEach(n => {
-    const pull = [0.07, 0.04, 0.025, 0.04][n.tier] * alpha;
+    // fewer tools shown (filter): a weaker pull, so they use the whole map
+    const pull = [0.07, 0.04, 0.025, 0.04][n.tier] * alpha * Math.min(1, ns.length / 30);
     n.vx += (ECO_CX - n.x) * pull; n.vy += (ECO_CY - n.y) * pull * 1.6;
     if (n.fx != null) { n.x = n.fx; n.y = n.fy; n.vx = 0; n.vy = 0; return; }
     n.vx *= 0.6; n.vy *= 0.6;
@@ -1137,6 +1153,14 @@ function ecoSettle(g) {
 function ecoProject(g, v) {
   const nodes = g.nodes.map(n => Object.assign({}, n, { x: n.x * v.k + v.tx, y: n.y * v.k + v.ty }));
   return Object.assign({}, g, { nodes, byId: new Map(nodes.map(n => [n.id, n])), edges: g.edges.map(e => Object.assign({}, e)) });
+}
+// the tools shown at a filter level (highest tier kept), with only the links between them;
+// tiers, counts and blast radius stay those of the whole ecosystem
+function ecoFilter(g, maxTier) {
+  if (maxTier >= 3) return g;
+  const nodes = g.nodes.filter(n => n.tier <= maxTier);
+  const byId = new Map(nodes.map(n => [n.id, n]));
+  return Object.assign({}, g, { nodes, byId, edges: g.edges.filter(e => byId.has(e.from) && byId.has(e.to)), sig: g.sig + "#" + maxTier });
 }
 // edges: a curve sampled as points, plus an arrowhead. Each link picks its bend (side and depth)
 // to stay clear of the other tools and their labels; a two-way pair keeps opposite sides
@@ -2535,7 +2559,8 @@ class Component extends DCLogic {
     // ---- ecosystem: tool dependency map, ranking and the selected tool's links ----
     const eco = { ecoNodes: [], ecoEdges: [], ecoRows: [], ecoTiers: [], ecoSel: null };
     if (st.tab === "ecosystem") {
-      const eg = ecoGeom(ecoProject(this.ecoLive(ecoGraph(m)), st.ecoView || { k: 1, tx: 0, ty: 0 }));
+      const full = ecoGraph(m), layer = ECO_LAYERS.find(l => l.id === st.ecoLayer) || ECO_LAYERS[2];
+      const eg = ecoGeom(ecoProject(this.ecoLive(ecoFilter(full, layer.maxTier)), st.ecoView || { k: 1, tx: 0, ty: 0 }));
       const selId = st.ecoSel && eg.byId.has(st.ecoSel) ? st.ecoSel : null;
       const fid = selId;
       const fn = fid ? eg.byId.get(fid) : null;
@@ -2572,13 +2597,25 @@ class Component extends DCLogic {
       }));
       eco.ecoTiers = TIERS.map((T, i) => ({
         label: T.label, note: T.note, fill: T.fill, stroke: T.stroke,
-        count: eg.nodes.filter(n => n.tier === i).length
+        count: full.nodes.filter(n => n.tier === i).length
       }));
-      eco.ecoSummary = eg.nodes.length + " tools · " + eg.edges.length + (eg.edges.length === 1 ? " dependency" : " dependencies");
-      eco.ecoEmpty = eg.nodes.length > 0 && eg.edges.length === 0;
+      eco.ecoSummary = full.nodes.length + " tools · " + full.edges.length + (full.edges.length === 1 ? " dependency" : " dependencies");
+      eco.ecoShown = eg.nodes.length === full.nodes.length ? "" : "Showing " + eg.nodes.length + " of " + full.nodes.length + " tools and " + eg.edges.length + " of " + full.edges.length + " dependencies";
+      eco.ecoEmpty = full.nodes.length > 0 && full.edges.length === 0;
+      eco.ecoLayers = ECO_LAYERS.map(l => {
+        const on = l.id === layer.id;
+        return {
+          label: l.label, icon: l.icon, selected: on ? "true" : "false",
+          bg: on ? "var(--color-accent-900)" : "transparent",
+          bd: on ? "var(--color-accent-600)" : "var(--color-divider)",
+          fg: on ? "var(--color-accent-100)" : "var(--color-neutral-200)",
+          onClick: () => this.setState({ ecoLayer: l.id })
+        };
+      });
       const sn = selId ? eg.byId.get(selId) : null;
       if (sn) {
-        const link = id => ({ name: eg.byId.get(id).name, select: () => this.setState({ ecoSel: id }) });
+        // a linked tool hidden by the filter is still listed; selecting it shows all tools
+        const link = id => ({ name: full.byId.get(id).name, select: () => this.setState(eg.byId.has(id) ? { ecoSel: id } : { ecoSel: id, ecoLayer: "all" }) });
         const T = TIERS[sn.tier];
         eco.ecoSel = {
           name: sn.name, tier: T.label, tierNote: T.note, tagCls: T.tag,

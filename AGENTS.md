@@ -121,8 +121,8 @@ saturated floods. Icons are **Phosphor** (`@phosphor-icons/web@2.1.1`, `<i class
    cell holds a free-text note per tool *and capability* (click to edit, one bullet per line); each line has a copy button to append it to the same tool's other capabilities ("Copy to X" / "Copy to all").
 3. **Ecosystem** — tool dependency graph. `ecoGraph(m)` (module level) builds nodes and
    edges from `tool.deps` (A → B: A depends on B; dangling ids, self-links and duplicates are
-   ignored), the tier per tool from its number of distinct linked tools (0 Isolated, 1 Satellite,
-   Central if ≥3 and either ≥60% of the max or a blast radius ≥40% of all tools, else Connected) and the blast radius (transitive dependents).
+   ignored), the tier per tool from its number of distinct linked tools (0 Not linked, 1 Satellite,
+   Central if ≥3 and either ≥60% of the max or a blast radius ≥40% of all tools, else Integrated) and the blast radius (transitive dependents).
    Layout is a small force simulation (`ecoStep`: repulsion, springs — short and dotted to
    satellites — and a pull to the centre that is strongest for central tools), viewBox
    `0 0 1000 620`. Live view: `ecoLive()` keeps positions across renders and model edits and
@@ -133,7 +133,10 @@ saturated floods. Icons are **Phosphor** (`@phosphor-icons/web@2.1.1`, `<i class
    radii or label sizes, so zooming spreads the graph out; export ignores the zoom. Reduced motion settles instantly. Names are HTML labels over the
    SVG (interpolated text does not render inside SVG `<text>`). Side panel: overview, or the
    selected tool's stats and its Depends on / Used by links (view-only, clicking one selects
-   it; a button jumps to the Editor). Ranking table below. The tab never edits the model. `ecoGeom()` turns positions into curved edges + arrowheads for both views; each link tries
+   it; a button jumps to the Editor). Ranking table below. The tab never edits the model. Filter (`state.ecoLayer`, `ECO_LAYERS`): Central / Central + Integrated / All; `ecoFilter()`
+   keeps the tiers up to that level and the links between them (tiers and numbers are always
+   computed on the whole graph). The simulation re-heats from the current positions, so
+   switching animates; export always shows all tools. `ecoGeom()` turns positions into curved edges + arrowheads for both views; each link tries
    a few bends (both sides, three depths; two-way pairs keep opposite sides) and keeps the one
    farthest from other tools and labels. `ecoStep` also pushes tools off links they are not
    part of and resolves overlaps between tool+label boxes, so names never sit on each other.
