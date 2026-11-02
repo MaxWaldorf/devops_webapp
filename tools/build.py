@@ -29,8 +29,9 @@ def build_id():
 
 
 def stamp(html, bid):
-    # The build id also busts the browser cache for the stylesheet on the hosted site.
+    # The build id also busts the browser cache for local assets on the hosted site.
     html = html.replace('href="styles.css"', f'href="styles.css?v={bid}"')
+    html = html.replace('src="app.js"', f'src="app.js?v={bid}"')
     return html.replace("<head>", f'<head>\n<meta name="build-id" content="{bid}">', 1)
 
 
@@ -48,7 +49,7 @@ def inline(html):
         return "<style>" + (SRC / m.group(1)).read_text(encoding="utf8") + "</style>"
 
     html = re.sub(r'<link rel="stylesheet" href="(styles\.css)(?:\?v=[0-9a-f]+)?">', style, html)
-    html = re.sub(r'<script src="((?:vendor)/[^"]+)"></script>', script, html)
+    html = re.sub(r'<script src="((?:vendor)/[^"]+|app\.js)(?:\?v=[0-9a-f]+)?"></script>', script, html)
     return re.sub(r'url\("((?:fonts)/[^"]+)"\)', url, html)
 
 
@@ -64,14 +65,17 @@ def build():
 
 
 def check():
+    source_html = stamp((SRC / "index.html").read_text(encoding="utf8"), build_id())
+    web_html = (WEB / "index.html").read_text(encoding="utf8")
+    standalone_html = STANDALONE.read_text(encoding="utf8")
     ids = {}
     for name, p in {"web": WEB / "index.html", "standalone": STANDALONE}.items():
         m = ID_RE.search(p.read_text(encoding="utf8"))
         ids[name] = m and m.group(1)
     ids["source"] = build_id()
-    left = re.findall(r'(?:src|url\()=?"?((?:vendor|fonts)/[^"\)]+)', STANDALONE.read_text(encoding="utf8"))
-    left += re.findall(r'<link[^>]*stylesheet[^>]*>', STANDALONE.read_text(encoding="utf8"))
-    if len(set(ids.values())) != 1 or left:
+    left = re.findall(r'(?:src|url\()=?"?((?:vendor|fonts)/[^"\)]+|app\.js(?:\?v=[0-9a-f]+)?)', standalone_html)
+    left += re.findall(r'<link[^>]*stylesheet[^>]*>', standalone_html)
+    if len(set(ids.values())) != 1 or left or web_html != source_html or standalone_html != inline(source_html) or (WEB / "app.js").read_bytes() != (SRC / "app.js").read_bytes():
         sys.exit(f"OUT OF SYNC: {ids} unresolved refs in standalone: {left}")
     css = sorted(set(re.findall(r'^\.ph\.ph-([a-z0-9-]+)::?before', (SRC / "styles.css").read_text(encoding="utf8"), re.M)))
     js = re.search(r'PHOSPHOR_ICONS = (\[.*?\]);', (SRC / "vendor" / "phosphor-icons.js").read_text(encoding="utf8"))

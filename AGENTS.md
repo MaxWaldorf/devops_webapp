@@ -6,7 +6,7 @@ Working notes for any agent (or human) picking this project up.
 
 A single-page interactive mockup of our software delivery lifecycle: an infinity
 loop of eight DevOps stages, an editable model behind it, a roadmap view and a tool dependency graph.
-Built as one Design Component: **`src/index.html`**.
+Built as one Design Component: **`src/index.html`** (template) and **`src/app.js`** (logic).
 
 Origin brief: recreate a classic DevOps infinity-loop diagram as vectors (loop
 only, no third-party tool logos), full-bleed, with a focus animation per section
@@ -18,7 +18,8 @@ and toggleable layers for capabilities, coverage, tooling and roadmap.
 
 | Path | Role |
 | --- | --- |
-| `src/index.html` | The design (template + logic class). Edit this. |
+| `src/index.html` | The design template and the DC logic bridge. |
+| `src/app.js` | The logic class, model, view logic and exports. Loaded before the DC runtime boots. |
 | `src/styles.css` | Nocturne tokens/component classes, `@font-face` (Inter, Phosphor), page base styles, `u-…` utilities and `c-…` classes for the template's static styling. Linked from `<head>`. |
 | `src/vendor/` | DC runtime (`dc-support.js`), React 18.3.1 UMD, Nocturne `ds-bundle.js`, Phosphor icon names (`phosphor-icons.js`), PptxGenJS + JSZip + jsPDF for export. |
 | `src/fonts/` | Inter (7 subsets, variable) + Phosphor icon font, woff2 only. |
@@ -40,7 +41,7 @@ and toggleable layers for capabilities, coverage, tooling and roadmap.
   (`make check` fails if it ends up under `dist/web`).
 
 They stay in sync **by construction**: the standalone is a purely mechanical inlining
-of `src/index.html` (`<script src="vendor/…">`, `<link rel="stylesheet" href="styles.css">` and `url(fonts/…)` become inline/data URIs);
+of `src/index.html` (`<script src="vendor/…">`, `<script src="app.js">`, `<link rel="stylesheet" href="styles.css">` and `url(fonts/…)` become inline/data URIs);
 there is no second copy of any logic. Both carry `<meta name="build-id">` = hash of all
 of `src/`. `make check` (and the Docker build) fails if the ids or the inlining differ. Never edit `dist/`, and never fork behaviour between the two —
 if something must differ, do it in `build.py`, not by hand.
@@ -56,7 +57,7 @@ the client just picks the store at runtime.
 | --- | --- |
 | `make build` | Generate `dist/web` and `dist/standalone/devops-lifecycle.html`. |
 | `make check` | Build, then verify both outputs match the source (build id, inlining, standalone not in the web package). |
-| `make lint` | stylelint on `src/styles.css`, html-validate on `src/index.html` (Node dev tools via `package.json`; keep it clean before finishing a change). |
+| `make lint` | stylelint on `src/styles.css`, html-validate on `src/index.html`, syntax check on `src/app.js` (Node dev tools via `package.json`; keep it clean before finishing a change). |
 | `make serve` | Preview `dist/web` at http://localhost:8080 with `tools/server.py` (static + `/api/model`, data in git-ignored `.data/`). |
 | `make standalone` | Build and print the path of the single-file version. |
 | `make run` / `make docker` | `docker compose up --build` / build the image only. |
@@ -104,6 +105,9 @@ saturated floods. Icons are **Phosphor** (`@phosphor-icons/web@2.1.1`, `<i class
 
 ## The four tabs
 
+Tabs are hash links (`#loop`, `#roadmap`, `#ecosystem`, `#editor`): direct links
+and Back/Forward restore the selected tab; unknown fragments show Lifecycle.
+
 1. **Lifecycle** — the loop. A Gerono lemniscate sampled in JS into 8 arc
    segments (`seg(i)` in the logic class, viewBox `0 0 1600 600`, `A/B/CX/CY`
    constants). Stage pills are HTML positioned over the SVG at percentage
@@ -149,7 +153,7 @@ saturated floods. Icons are **Phosphor** (`@phosphor-icons/web@2.1.1`, `<i class
 
 ## Export (PDF / PPTX)
 
-`buildDeck()` in the logic class lays every slide out once as a list of drawing ops
+`buildDeck()` in the logic class (`src/app.js`) lays every slide out once as a list of drawing ops
 (`rect`, `chip`, `bar`, `line`, `path`, `circle`, `half`, `icon`, `text`) in 1600×900 slide
 units (120 per inch), using a fixed snapshot from `exportData()` (all layers on, no focus,
 end quarter; the lifecycle slide uses the same view with the Coverage layer off, so it shows
@@ -174,7 +178,7 @@ Server API (`tools/server.py`): `GET /api/model` → `{ "model": <model|null> }`
 `cid` cookie (random 32-hex, HttpOnly, 10 years) on first contact; `PUT /api/model` stores
 the body (must have 8 `stages` and a `tools` array, max 2 MB) as `DATA_DIR/<cid>.json`,
 atomically. No accounts: clearing cookies or switching browser starts a fresh model. The
-client (`initStore()` / `persist()` in the logic class) asks the API first and falls back
+client (`initStore()` / `persist()` in `src/app.js`) asks the API first and falls back
 to `localStorage` if it is absent or `file://`; edits made before the first response are
 kept and pushed, not overwritten. Nothing is written until the first edit, so a browser
 that never edits keeps getting the seed.
@@ -233,11 +237,11 @@ that wrapper or a bare model, validates the shape, migrates, then saves.
   `tools/`, the data model / storage key / schema, CI or licensing must update `README.md`
   in the same change. Before finishing any task, re-read `README.md` and confirm it is still accurate.
 
-- One DC file: `src/index.html`. Edit it directly, then `make lint`, `make check` and
+- One DC template: `src/index.html`, with its logic in `src/app.js`. Edit the appropriate source, then `make lint`, `make check` and
   open both outputs. Do **not** hand-write `.jsx` or extra HTML pages. New local assets
-  must live under `src/vendor/` or `src/fonts/` (or be `src/styles.css`); those are the
-  only paths `build.py` inlines. Reference them as `vendor/…` / `fonts/…` / `styles.css`;
-  no CDN or other external URLs, so the standalone stays offline.
+  must live under `src/vendor/` or `src/fonts/` (or be `src/styles.css`); the application
+  logic belongs in `src/app.js`. These are the only paths `build.py` inlines. Reference
+  them locally; no CDN or other external URLs, so the standalone stays offline.
 - Styling: static styles live in `src/styles.css` (Nocturne classes, `@font-face`,
   base styles, then at the end `u-…` single-declaration utilities and `c-…` classes for
   the template's remaining static declarations). Only declarations containing a `{{…}}`
@@ -251,7 +255,7 @@ that wrapper or a bare model, validates the shape, migrates, then saves.
   need `type`, icon-only buttons an `aria-label`, inputs a `type`. The rules turned off
   in `.stylelintrc.json` / `.htmlvalidate.json` are deliberate (generated class names,
   vendor Phosphor CSS, custom template elements and `{{…}}` placeholders).
-- Template holes are dotted lookups only; compute everything in `renderVals()`.
+- Template holes are dotted lookups only; compute everything in `renderVals()` in `src/app.js`.
 - Never store anything in `localStorage` other than the model key above (and only in the fallback mode).
 - Capability icons: the editor lists all ~1,530 Phosphor names from
   `src/vendor/phosphor-icons.js` (`window.PHOSPHOR_ICONS`, loaded as a script so it also
