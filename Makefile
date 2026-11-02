@@ -9,10 +9,11 @@ check: build ## build, then verify web + standalone are in sync
 standalone: build ## the single-file local version -> dist/standalone/devops-lifecycle.html
 	@echo dist/standalone/devops-lifecycle.html
 
-lint: ## lint src/styles.css (stylelint) and src/index.html (html-validate); needs Node
+lint: ## lint src/styles.css and src/index.html; check src/app.js syntax; needs Node
 	npm install --no-audit --no-fund --silent
 	npx stylelint src/styles.css
 	npx html-validate src/index.html
+	node --check src/app.js
 
 serve: build ## preview the web build at http://localhost:8080
 	DATA_DIR=.data python3 tools/server.py --dir dist/web --port 8080

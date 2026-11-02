@@ -13,6 +13,10 @@ third-party tool logos, works offline.
 | **Ecosystem** | A live dependency graph of the tools: it lays itself out so the most connected tools gather in the middle and satellites cluster around the tool they hang off (links to satellites are dotted). Drag tools to rearrange, scroll to zoom (tools spread apart, labels keep their size) and drag the background to pan; click one to highlight its links (click it again, or the panel's ×, to clear). A filter shows Central tools only, Central + Integrated, or all tools (the graph re-arranges itself for the tools shown). Each tool gets a tier (Central, Integrated, Satellite, Not linked), "used by" / "depends on" counts and a blast radius (tools affected, directly or indirectly, if it is unavailable), also shown in a ranking table. The tab is view-only: dependencies are entered per tool in the Editor. |
 | **Editor** | Edit the model: timeline range, stages and capabilities, tools table (with a note per tool→capability assignment and a "Depends on" list per tool), Save/Load JSON. |
 
+Each tab has a shareable URL fragment (`#loop`, `#roadmap`, `#ecosystem`, `#editor`).
+Opening one directly or using the browser's Back/Forward buttons selects that tab;
+unknown fragments show Lifecycle.
+
 Readiness is derived from the model, never stored: a capability takes the best status
 among its tools at the selected quarter, and a stage's percentage is the mean of its
 capabilities. Tool names, capabilities and highlights are sample content (the sample tools
@@ -40,7 +44,7 @@ Requires Python 3 (build) and optionally Docker (hosted image).
 | --- | --- |
 | `make build` | Generate `dist/web` and `dist/standalone/devops-lifecycle.html` from `src/`. |
 | `make check` | Build, verify both outputs match the source. |
-| `make lint` | Lint `src/styles.css` (stylelint) and `src/index.html` (html-validate). Needs Node; installs dev tools from `package.json`. |
+| `make lint` | Lint `src/styles.css` (stylelint), `src/index.html` (html-validate), and check `src/app.js` syntax. Needs Node; installs dev tools from `package.json`. |
 | `make serve` | Preview the site at http://localhost:8080. |
 | `make standalone` | Build and print the path of the single-file version (double-click to open, works from `file://`). |
 | `make run` | `docker compose up --build`, served at http://localhost:8080. |
@@ -53,7 +57,8 @@ The standalone file is for local use only and is never part of the hosted image.
 
 | Path | Role |
 | --- | --- |
-| `src/index.html` | The whole design (template and logic). The single source of truth; edit this. |
+| `src/index.html` | The design template and the small DC logic bridge. |
+| `src/app.js` | The model, view logic and exports, loaded by the template. Both are sources of truth in `src/`. |
 | `src/styles.css` | Design-system tokens, component classes, font faces, base styles and the template's static styling; only data-driven styles stay inline in `index.html` (separate file on the hosted site, inlined into the standalone). |
 | `src/vendor/`, `src/fonts/` | Vendored React, DC runtime, design-system bundle, Phosphor icon-name list, PptxGenJS/JSZip/jsPDF (export), Inter and Phosphor fonts. |
 | `tools/build.py` | Builds the site and the standalone file and checks they match. |
